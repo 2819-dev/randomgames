@@ -109,6 +109,47 @@ body {
   }
 }
 
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(6deg);
+  }
+}
+
+@keyframes floaty-delayed {
+  0%,
+  100% {
+    transform: translateY(0) rotate(8deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(-4deg);
+  }
+}
+
+@keyframes bounce-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes confetti {
+  0% {
+    transform: translateY(-10%) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(540deg);
+    opacity: 0;
+  }
+}
+
 .animate-pop-in {
   animation: pop-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -127,6 +168,22 @@ body {
 
 .animate-slide-up {
   animation: slide-up 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.animate-float {
+  animation: floaty 4.5s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: floaty-delayed 5.5s ease-in-out infinite;
+}
+
+.animate-bounce-soft {
+  animation: bounce-soft 2.4s ease-in-out infinite;
+}
+
+.animate-confetti {
+  animation: confetti 1.6s ease-in forwards;
 }
 
 .chunky {
@@ -169,7 +226,11 @@ body {
   .animate-wiggle,
   .animate-score-pop,
   .animate-pulse-ring,
-  .animate-slide-up {
+  .animate-slide-up,
+  .animate-float,
+  .animate-float-delayed,
+  .animate-bounce-soft,
+  .animate-confetti {
     animation: none;
   }
 }

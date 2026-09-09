@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bungee, Rubik } from "next/font/google";
 import "./globals.css";
 
@@ -16,7 +16,30 @@ const body = Rubik({
 export const metadata: Metadata = {
   title: "Bored Box — tiny games for restless brains",
   description:
-    "A chunky little arcade of simple browser games: Snake, Memory, Tic-Tac-Toe, Reaction, and 2048.",
+    "A chunky little arcade of playful browser games. Snake, memory, whack-a-mole, and more — add to your Home Screen.",
+  applicationName: "Bored Box",
+  appleWebApp: {
+    capable: true,
+    title: "Bored Box",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  manifest: "/manifest.webmanifest",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#c8f542",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

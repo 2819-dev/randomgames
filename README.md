@@ -1,14 +1,11 @@
 # Bored Box
 
-A chunky little arcade of simple browser games for when you're bored.
+A chunky, playful arcade of tiny browser games for when you're bored.
 
 ## Games
 
-- **Snek** — classic snake
-- **Matchup** — memory pairs
-- **Xs & Os** — tic-tac-toe vs a basic AI
-- **Zap** — reaction timer
-- **2048** — slide and merge
+- Snek, Matchup, Xs & Os, Zap, 2048
+- Echo, Whack, Showdown, Lights Out
 
 ## Run
 
@@ -17,4 +14,15 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+## Deploy (Netlify)
+
+```bash
+npm run build
+npx netlify deploy --prod --dir=out
+```
+
+Static export lands in `out/` (see `netlify.toml`).
+
+## Home Screen
+
+Open the site on your phone → Share / Add to Home Screen. Uses `apple-touch-icon` + web manifest.
