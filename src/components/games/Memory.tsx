@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { GameShell } from "@/components/GameShell";
 
 const ICONS = ["🦊", "🐸", "🐯", "🦄", "🐙", "🐼", "🐧", "🐰"];
@@ -29,23 +29,14 @@ export function MemoryGame({ onBack }: { onBack: () => void }) {
   const [picked, setPicked] = useState<number[]>([]);
   const [moves, setMoves] = useState(0);
   const [lock, setLock] = useState(false);
-  const [won, setWon] = useState(false);
 
-  const matchedCount = useMemo(
-    () => cards.filter((c) => c.matched).length,
-    [cards],
-  );
-
-  useEffect(() => {
-    if (matchedCount === cards.length && cards.length > 0) setWon(true);
-  }, [cards.length, matchedCount]);
+  const won = cards.length > 0 && cards.every((c) => c.matched);
 
   const reset = () => {
     setCards(buildDeck());
     setPicked([]);
     setMoves(0);
     setLock(false);
-    setWon(false);
   };
 
   const flip = (id: number) => {
