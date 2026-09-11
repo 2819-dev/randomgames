@@ -16,7 +16,8 @@ export type GameId =
   | "breakout"
   | "flappy"
   | "mines"
-  | "dodge";
+  | "dodge"
+  | "rumble";
 
 export type GameMeta = {
   id: GameId;
@@ -32,10 +33,43 @@ export const GAMES: GameMeta[] = [
   {
     id: "slither",
     title: "Slither",
-    blurb: "Eat pellets. Grow long. Cut off hungry bots.",
+    blurb: "Power pellets, kill streaks, and bots that hunt back.",
     time: "~5 min",
     accent: "#c8f542",
     sticker: "🪱",
+  },
+  {
+    id: "rumble",
+    title: "Rumble",
+    blurb: "Arena survivor. Pulse shockwaves. Level up mid-fight.",
+    time: "~4 min",
+    accent: "#a3e635",
+    sticker: "💥",
+  },
+  {
+    id: "dodge",
+    title: "Dodge+",
+    blurb: "Auto-fire wave shooter. Shields, tanks, screen clears.",
+    time: "~3 min",
+    accent: "#fb7185",
+    ink: "#fff",
+    sticker: "🚀",
+  },
+  {
+    id: "breakout",
+    title: "Breakout+",
+    blurb: "Levels, combos, lasers, multi-ball — brick warfare.",
+    time: "~4 min",
+    accent: "#ff8c42",
+    sticker: "🧱",
+  },
+  {
+    id: "whack",
+    title: "Whack+",
+    blurb: "Gold moles, bombs, combos, fever mode. Don't whiff.",
+    time: "~1 min",
+    accent: "#ff8c42",
+    sticker: "🔨",
   },
   {
     id: "snake",
@@ -46,29 +80,12 @@ export const GAMES: GameMeta[] = [
     sticker: "🐍",
   },
   {
-    id: "breakout",
-    title: "Breakout",
-    blurb: "Bounce the ball. Smash every brick.",
-    time: "~3 min",
-    accent: "#ff8c42",
-    sticker: "🧱",
-  },
-  {
     id: "flappy",
     title: "Flap",
     blurb: "Tap to flap. Don't kiss the pipes.",
     time: "~2 min",
     accent: "#7dd3fc",
     sticker: "🐤",
-  },
-  {
-    id: "dodge",
-    title: "Dodge",
-    blurb: "Slide around. Survive the falling chaos.",
-    time: "~1 min",
-    accent: "#fb7185",
-    ink: "#fff",
-    sticker: "🛹",
   },
   {
     id: "mines",
@@ -120,14 +137,6 @@ export const GAMES: GameMeta[] = [
     time: "~2 min",
     accent: "var(--mint)",
     sticker: "🎵",
-  },
-  {
-    id: "whack",
-    title: "Whack",
-    blurb: "Bonk the critters. Miss and they giggle at you.",
-    time: "~1 min",
-    accent: "#ff8c42",
-    sticker: "🔨",
   },
   {
     id: "showdown",
@@ -184,10 +193,10 @@ export const GAMES: GameMeta[] = [
 ];
 
 export const TAGLINES = [
-  "Eighteen tiny games. Zero productivity. Maximum vibes.",
+  "Nineteen games. Power-ups. Waves. Zero productivity.",
   "Your brain called — it wants a snack break.",
   "Pick a tile. Become ungovernable for five minutes.",
   "Officially sanctioned time-wasting apparatus.",
   "Caution: may cause sudden grinning.",
-  "Now with Slither bots. You're welcome.",
+  "Now with Rumble, Dodge+, and Breakout+. You're welcome.",
 ];

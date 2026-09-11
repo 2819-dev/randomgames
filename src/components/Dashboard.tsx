@@ -22,11 +22,14 @@ import { BreakoutGame } from "@/components/games/Breakout";
 import { FlappyGame } from "@/components/games/Flappy";
 import { MinesGame } from "@/components/games/Mines";
 import { DodgeGame } from "@/components/games/Dodge";
+import { RumbleGame } from "@/components/games/Rumble";
 
 function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
   switch (id) {
     case "slither":
       return <SlitherGame onBack={onBack} />;
+    case "rumble":
+      return <RumbleGame onBack={onBack} />;
     case "snake":
       return <SnakeGame onBack={onBack} />;
     case "memory":
