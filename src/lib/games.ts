@@ -7,7 +7,11 @@ export type GameId =
   | "echo"
   | "whack"
   | "showdown"
-  | "lights";
+  | "lights"
+  | "hangman"
+  | "connect"
+  | "higher"
+  | "catch";
 
 export type GameMeta = {
   id: GameId;
@@ -96,10 +100,45 @@ export const GAMES: GameMeta[] = [
     accent: "#7ce7ff",
     sticker: "💡",
   },
+  {
+    id: "hangman",
+    title: "Hangman",
+    blurb: "Guess the word before the smile becomes a skull.",
+    time: "~2 min",
+    accent: "#a78bfa",
+    ink: "#fff",
+    sticker: "🔤",
+  },
+  {
+    id: "connect",
+    title: "Connect 4",
+    blurb: "Drop discs. Get four. Outsmart the orange CPU.",
+    time: "~3 min",
+    accent: "#f97316",
+    ink: "#fff",
+    sticker: "🔴",
+  },
+  {
+    id: "higher",
+    title: "Higher?",
+    blurb: "Guess if the next card goes up or down.",
+    time: "~1 min",
+    accent: "#22d3ee",
+    sticker: "🃏",
+  },
+  {
+    id: "catch",
+    title: "Catch!",
+    blurb: "Tap floating snacks before they vanish.",
+    time: "~1 min",
+    accent: "#f43f5e",
+    ink: "#fff",
+    sticker: "👾",
+  },
 ];
 
 export const TAGLINES = [
-  "Nine tiny games. Zero productivity. Maximum vibes.",
+  "Thirteen tiny games. Zero productivity. Maximum vibes.",
   "Your brain called — it wants a snack break.",
   "Pick a tile. Become ungovernable for five minutes.",
   "Officially sanctioned time-wasting apparatus.",

@@ -13,6 +13,10 @@ import { EchoGame } from "@/components/games/Echo";
 import { WhackGame } from "@/components/games/Whack";
 import { ShowdownGame } from "@/components/games/Showdown";
 import { LightsGame } from "@/components/games/Lights";
+import { HangmanGame } from "@/components/games/Hangman";
+import { ConnectGame } from "@/components/games/Connect";
+import { HigherLowerGame } from "@/components/games/HigherLower";
+import { CatchGame } from "@/components/games/Catch";
 
 function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
   switch (id) {
@@ -34,12 +38,20 @@ function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
       return <ShowdownGame onBack={onBack} />;
     case "lights":
       return <LightsGame onBack={onBack} />;
+    case "hangman":
+      return <HangmanGame onBack={onBack} />;
+    case "connect":
+      return <ConnectGame onBack={onBack} />;
+    case "higher":
+      return <HigherLowerGame onBack={onBack} />;
+    case "catch":
+      return <CatchGame onBack={onBack} />;
   }
 }
 
 export function Dashboard() {
   const [active, setActive] = useState<GameId | null>(null);
-  const tagline = TAGLINES[3];
+  const tagline = TAGLINES[0];
 
   if (active) {
     return (
@@ -103,7 +115,7 @@ export function Dashboard() {
               background: game.accent,
               color: game.ink ?? "var(--ink)",
               boxShadow: "5px 5px 0 var(--ink)",
-              animationDelay: `${100 + i * 55}ms`,
+              animationDelay: `${100 + i * 45}ms`,
             }}
           >
             <span className="absolute -right-1 -top-1 rotate-12 text-4xl drop-shadow-[2px_2px_0_rgba(22,20,31,0.25)] transition-transform group-hover:scale-110 group-hover:rotate-[18deg]">
