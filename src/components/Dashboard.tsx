@@ -17,9 +17,16 @@ import { HangmanGame } from "@/components/games/Hangman";
 import { ConnectGame } from "@/components/games/Connect";
 import { HigherLowerGame } from "@/components/games/HigherLower";
 import { CatchGame } from "@/components/games/Catch";
+import { SlitherGame } from "@/components/games/Slither";
+import { BreakoutGame } from "@/components/games/Breakout";
+import { FlappyGame } from "@/components/games/Flappy";
+import { MinesGame } from "@/components/games/Mines";
+import { DodgeGame } from "@/components/games/Dodge";
 
 function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
   switch (id) {
+    case "slither":
+      return <SlitherGame onBack={onBack} />;
     case "snake":
       return <SnakeGame onBack={onBack} />;
     case "memory":
@@ -46,6 +53,14 @@ function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
       return <HigherLowerGame onBack={onBack} />;
     case "catch":
       return <CatchGame onBack={onBack} />;
+    case "breakout":
+      return <BreakoutGame onBack={onBack} />;
+    case "flappy":
+      return <FlappyGame onBack={onBack} />;
+    case "mines":
+      return <MinesGame onBack={onBack} />;
+    case "dodge":
+      return <DodgeGame onBack={onBack} />;
   }
 }
 

@@ -1,4 +1,5 @@
 export type GameId =
+  | "slither"
   | "snake"
   | "memory"
   | "tictactoe"
@@ -11,7 +12,11 @@ export type GameId =
   | "hangman"
   | "connect"
   | "higher"
-  | "catch";
+  | "catch"
+  | "breakout"
+  | "flappy"
+  | "mines"
+  | "dodge";
 
 export type GameMeta = {
   id: GameId;
@@ -25,12 +30,53 @@ export type GameMeta = {
 
 export const GAMES: GameMeta[] = [
   {
+    id: "slither",
+    title: "Slither",
+    blurb: "Eat pellets. Grow long. Cut off hungry bots.",
+    time: "~5 min",
+    accent: "#c8f542",
+    sticker: "🪱",
+  },
+  {
     id: "snake",
     title: "Snek",
     blurb: "Eat dots. Don't hit walls. Classic noodle chaos.",
     time: "~2 min",
     accent: "var(--lime)",
     sticker: "🐍",
+  },
+  {
+    id: "breakout",
+    title: "Breakout",
+    blurb: "Bounce the ball. Smash every brick.",
+    time: "~3 min",
+    accent: "#ff8c42",
+    sticker: "🧱",
+  },
+  {
+    id: "flappy",
+    title: "Flap",
+    blurb: "Tap to flap. Don't kiss the pipes.",
+    time: "~2 min",
+    accent: "#7dd3fc",
+    sticker: "🐤",
+  },
+  {
+    id: "dodge",
+    title: "Dodge",
+    blurb: "Slide around. Survive the falling chaos.",
+    time: "~1 min",
+    accent: "#fb7185",
+    ink: "#fff",
+    sticker: "🛹",
+  },
+  {
+    id: "mines",
+    title: "Mines",
+    blurb: "Clear the field. Don't boom.",
+    time: "~3 min",
+    accent: "#94a3b8",
+    sticker: "💣",
   },
   {
     id: "memory",
@@ -138,9 +184,10 @@ export const GAMES: GameMeta[] = [
 ];
 
 export const TAGLINES = [
-  "Thirteen tiny games. Zero productivity. Maximum vibes.",
+  "Eighteen tiny games. Zero productivity. Maximum vibes.",
   "Your brain called — it wants a snack break.",
   "Pick a tile. Become ungovernable for five minutes.",
   "Officially sanctioned time-wasting apparatus.",
   "Caution: may cause sudden grinning.",
+  "Now with Slither bots. You're welcome.",
 ];
