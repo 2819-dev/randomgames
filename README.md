@@ -4,8 +4,7 @@ A chunky, playful arcade of tiny browser games for when you're bored.
 
 ## Games
 
-- Snek, Matchup, Xs & Os, Zap, 2048
-- Echo, Whack, Showdown, Lights Out
+Snek · Matchup · Xs & Os · Zap · 2048 · Echo · Whack · Showdown · Lights Out · Hangman · Connect 4 · Higher? · Catch!
 
 ## Run
 
