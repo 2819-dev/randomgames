@@ -101,14 +101,14 @@ export function RumbleGame({ onBack }: { onBack: () => void }) {
       time: 0,
       pulseCd: 0,
       dashCd: 0,
-      spawnCd: 0.4,
-      invuln: 0,
+      spawnCd: 1.2,
+      invuln: 2,
       pulseR: 0,
       pulseActive: false,
       pointer: null,
     };
     setStatus("play");
-    setToast("Survive the pit");
+    setToast("2s shield — then survive");
     sync();
     playTap();
   };
