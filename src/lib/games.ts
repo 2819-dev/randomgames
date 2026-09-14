@@ -39,6 +39,16 @@ export type GameMeta = {
 
 export const GAMES: GameMeta[] = [
   {
+    id: "crewcheck",
+    title: "Crew Check",
+    blurb: "Among Us energy: rooms, tasks, kills, sabotage, meetings, votes.",
+    time: "~15 min",
+    accent: "#ef4444",
+    ink: "#fff",
+    sticker: "🕵️",
+    mode: "solo",
+  },
+  {
     id: "pulseduel",
     title: "Pulse Duel",
     blurb: "Auto-armed pulses. First clean tap wins the round. Early = foul.",
@@ -96,16 +106,7 @@ export const GAMES: GameMeta[] = [
     sticker: "⛏️",
     mode: "both",
   },
-  {
-    id: "crewcheck",
-    title: "Crew Check",
-    blurb: "Pass the phone, find the impostor, finish the jobs.",
-    time: "~8 min",
-    accent: "#ef4444",
-    ink: "#fff",
-    sticker: "🕵️",
-    mode: "solo",
-  },
+  
   {
     id: "slither",
     title: "Slither",
@@ -145,11 +146,12 @@ export const GAMES: GameMeta[] = [
   },
   {
     id: "whack",
-    title: "Whack+",
-    blurb: "Hit the gold, skip the bombs, ride the fever streak.",
+    title: "Sus Hunt",
+    blurb: "Eject impostors. Spare the crew. Wrong calls cost lives.",
     time: "~1 min",
-    accent: "#ff8c42",
-    sticker: "🔨",
+    accent: "#ef4444",
+    ink: "#fff",
+    sticker: "🗡️",
     mode: "solo",
   },
   {

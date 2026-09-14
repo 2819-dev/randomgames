@@ -1,66 +1,68 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { GameShell } from "@/components/GameShell";
 import { Confetti } from "@/components/Confetti";
+import { GameShell } from "@/components/GameShell";
 import { beep, playBonk, playTap, playWin } from "@/lib/sfx";
 import { pick, randInt } from "@/lib/random";
 
-type MoleKind = "normal" | "gold" | "bomb" | "swift";
+/** Among Us DNA: asymmetric targets, stakes, punishment for wrong calls. */
 
-type Mole = {
+type Kind = "crew" | "impostor" | "engineer" | "bomb";
+
+type Pop = {
   hole: number;
-  kind: MoleKind;
+  kind: Kind;
   face: string;
   born: number;
   life: number;
 };
 
-const FACES: Record<MoleKind, string[]> = {
-  normal: ["🐹", "🐰", "🐸", "🐥", "🦊"],
-  gold: ["👑", "⭐", "💎"],
-  bomb: ["💣", "🧨"],
-  swift: ["⚡", "🐿️"],
+const FACES: Record<Kind, string[]> = {
+  crew: ["🔴", "🔵", "🟢", "🟡", "🟣"],
+  impostor: ["🗡️", "😈", "🕶️"],
+  engineer: ["🛠️", "🧰"],
+  bomb: ["💣", "🚨"],
 };
 
 const HOLES = 9;
-const DURATION = 35_000;
+const DURATION = 40_000;
 
-function rollKind(fever: boolean): MoleKind {
+function roll(fever: boolean): Kind {
   const r = Math.random();
   if (fever) {
-    if (r < 0.12) return "bomb";
-    if (r < 0.38) return "gold";
-    if (r < 0.55) return "swift";
-    return "normal";
+    if (r < 0.08) return "bomb";
+    if (r < 0.42) return "impostor";
+    if (r < 0.55) return "engineer";
+    return "crew";
   }
   if (r < 0.1) return "bomb";
-  if (r < 0.22) return "gold";
-  if (r < 0.34) return "swift";
-  return "normal";
+  if (r < 0.32) return "impostor";
+  if (r < 0.42) return "engineer";
+  return "crew";
 }
 
 export function WhackGame({ onBack }: { onBack: () => void }) {
-  const [moles, setMoles] = useState<Mole[]>([]);
+  const [pops, setPops] = useState<Pop[]>([]);
   const [score, setScore] = useState(0);
+  const [lives, setLives] = useState(3);
   const [combo, setCombo] = useState(0);
-  const [bestCombo, setBestCombo] = useState(0);
-  const [left, setLeft] = useState(35);
+  const [left, setLeft] = useState(40);
   const [fever, setFever] = useState(false);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState("Hit impostors. Miss crew. Find the fakers.");
 
   const scoreRef = useRef(0);
   const comboRef = useRef(0);
+  const livesRef = useRef(3);
   const feverRef = useRef(false);
   const feverUntil = useRef(0);
-  const molesRef = useRef<Mole[]>([]);
-  const missStreak = useRef(0);
+  const popsRef = useRef<Pop[]>([]);
 
   useEffect(() => {
-    molesRef.current = moles;
-  }, [moles]);
+    popsRef.current = pops;
+  }, [pops]);
 
   useEffect(() => {
     if (!running) return;
@@ -71,67 +73,53 @@ export function WhackGame({ onBack }: { onBack: () => void }) {
       const now = Date.now();
       const remain = Math.max(0, DURATION - (now - start));
       setLeft(Math.ceil(remain / 1000));
-
       if (feverRef.current && now > feverUntil.current) {
         feverRef.current = false;
         setFever(false);
-        setToast("");
       }
-
-      setMoles((prev) => prev.filter((m) => now - m.born < m.life));
-
-      if (remain <= 0) {
+      setPops((prev) => prev.filter((m) => now - m.born < m.life));
+      if (remain <= 0 || livesRef.current <= 0) {
         window.clearInterval(tick);
         window.clearTimeout(spawnTimer);
         setRunning(false);
         setDone(true);
-        setMoles([]);
-        if (scoreRef.current >= 40) playWin();
+        setPops([]);
+        if (scoreRef.current >= 50) playWin();
         else playBonk();
+        setToast(
+          livesRef.current <= 0
+            ? `Crew turned on you — ${scoreRef.current} pts`
+            : `Shift over — ${scoreRef.current} pts`,
+        );
       }
     }, 100);
 
-    const spawnOne = () => {
-      const now = Date.now();
-      const elapsed = now - start;
-      const occupied = new Set(molesRef.current.map((m) => m.hole));
-      const free = Array.from({ length: HOLES }, (_, i) => i).filter((i) => !occupied.has(i));
-      if (free.length === 0) return;
-
-      const kind = rollKind(feverRef.current);
-      const hole = free[randInt(free.length)]!;
-      const life =
-        kind === "swift"
-          ? 420 + randInt(180)
-          : kind === "gold"
-            ? 700 + randInt(250)
-            : kind === "bomb"
-              ? 900 + randInt(300)
-              : 650 + randInt(350) - Math.min(220, elapsed / 80);
-
-      const mole: Mole = {
-        hole,
-        kind,
-        face: pick(FACES[kind]),
-        born: now,
-        life: Math.max(320, life),
-      };
-      setMoles((prev) => [...prev.filter((m) => now - m.born < m.life), mole]);
-    };
-
     const schedule = () => {
-      const now = Date.now();
-      const elapsed = now - start;
-      const base = feverRef.current ? 220 : 380;
-      const gap = Math.max(feverRef.current ? 140 : 200, base - elapsed / 90);
+      const elapsed = Date.now() - start;
+      const delay = Math.max(280, 700 - elapsed / 60 - (feverRef.current ? 120 : 0));
       spawnTimer = window.setTimeout(() => {
-        spawnOne();
-        if (feverRef.current || Math.random() < 0.28 + elapsed / 80_000) spawnOne();
-        if (Math.random() < 0.12) spawnOne();
-        schedule();
-      }, gap + randInt(120));
+        const now = Date.now();
+        const occupied = new Set(popsRef.current.map((m) => m.hole));
+        const free = Array.from({ length: HOLES }, (_, i) => i).filter((i) => !occupied.has(i));
+        if (free.length) {
+          const kind = roll(feverRef.current);
+          const hole = free[randInt(free.length)]!;
+          const life =
+            kind === "impostor"
+              ? 520 + randInt(220)
+              : kind === "engineer"
+                ? 700 + randInt(200)
+                : kind === "bomb"
+                  ? 900
+                  : 650 + randInt(280);
+          setPops((prev) => [
+            ...prev.filter((m) => now - m.born < m.life),
+            { hole, kind, face: pick(FACES[kind]), born: now, life },
+          ]);
+        }
+        if (Date.now() - start < DURATION && livesRef.current > 0) schedule();
+      }, delay);
     };
-    spawnOne();
     schedule();
 
     return () => {
@@ -143,137 +131,106 @@ export function WhackGame({ onBack }: { onBack: () => void }) {
   const start = () => {
     scoreRef.current = 0;
     comboRef.current = 0;
+    livesRef.current = 3;
     feverRef.current = false;
-    feverUntil.current = 0;
-    missStreak.current = 0;
     setScore(0);
     setCombo(0);
-    setBestCombo(0);
-    setLeft(35);
+    setLives(3);
+    setLeft(40);
     setFever(false);
     setDone(false);
-    setToast("");
-    setMoles([]);
+    setPops([]);
+    setToast("Impostors = points. Crew = you lose a life.");
     setRunning(true);
     playTap();
   };
 
-  const whack = (hole: number) => {
+  const hit = (hole: number) => {
     if (!running) return;
-    const target = molesRef.current.find((m) => m.hole === hole);
-    if (!target) {
-      missStreak.current += 1;
-      if (missStreak.current >= 2) {
-        comboRef.current = 0;
-        setCombo(0);
-      }
-      playBonk();
-      return;
-    }
+    const m = popsRef.current.find((x) => x.hole === hole);
+    if (!m) return;
+    setPops((prev) => prev.filter((x) => x.hole !== hole));
 
-    missStreak.current = 0;
-    setMoles((prev) => prev.filter((m) => m.hole !== hole));
-
-    if (target.kind === "bomb") {
+    if (m.kind === "impostor") {
+      comboRef.current += 1;
+      const gain = 10 + comboRef.current * 3;
+      scoreRef.current += gain;
+      setScore(scoreRef.current);
+      setCombo(comboRef.current);
+      beep(520 + comboRef.current * 40, 0.05, "square", 0.045);
+      if (comboRef.current >= 4 && !feverRef.current) {
+        feverRef.current = true;
+        feverUntil.current = Date.now() + 6000;
+        setFever(true);
+        playWin();
+        setToast("EMERGENCY FEVER — impostors everywhere");
+      } else setToast(`Caught! +${gain}`);
+    } else if (m.kind === "engineer") {
+      livesRef.current = Math.min(5, livesRef.current + 1);
+      setLives(livesRef.current);
+      scoreRef.current += 5;
+      setScore(scoreRef.current);
+      playTap();
+      setToast("Engineer assist +1 life");
+    } else if (m.kind === "bomb") {
       comboRef.current = 0;
       setCombo(0);
-      scoreRef.current = Math.max(0, scoreRef.current - 8);
-      setScore(scoreRef.current);
-      setToast("BOMB −8");
+      livesRef.current -= 1;
+      setLives(livesRef.current);
       playBonk();
-      return;
-    }
-
-    const mult = 1 + Math.floor(comboRef.current / 4);
-    const base = target.kind === "gold" ? 5 : target.kind === "swift" ? 3 : 1;
-    const gained = base * mult + (feverRef.current ? 2 : 0);
-    scoreRef.current += gained;
-    comboRef.current += 1;
-    setScore(scoreRef.current);
-    setCombo(comboRef.current);
-    setBestCombo((b) => Math.max(b, comboRef.current));
-
-    if (target.kind === "gold") {
-      setToast(`GOLD +${gained}`);
-      playWin();
+      setToast("Sabotage! −1 life");
     } else {
-      beep(640 + Math.min(420, comboRef.current * 35), 0.05, "triangle", 0.05);
-      if (target.kind === "swift") setToast(`SWIFT +${gained}`);
-      else if (mult > 1) setToast(`x${mult} HIT +${gained}`);
-      else setToast("");
-    }
-
-    if (comboRef.current >= 8 && !feverRef.current) {
-      feverRef.current = true;
-      feverUntil.current = Date.now() + 6500;
-      setFever(true);
-      setToast("FEVER MODE");
-      playWin();
+      comboRef.current = 0;
+      setCombo(0);
+      livesRef.current -= 1;
+      setLives(livesRef.current);
+      playBonk();
+      setToast("Wrong! That was crew.");
     }
   };
 
   return (
     <GameShell
-      title="Whack+"
-      accent="#ff8c42"
+      title="Sus Hunt"
+      accent="#ef4444"
+      ink="#fff"
       onBack={onBack}
       stats={
         <span>
-          {score} · x{combo || 1} · {left}s
+          {score} · ❤{lives} · {left}s{combo > 1 ? ` · x${combo}` : ""}
         </span>
       }
     >
-      <div className="relative">
-        <Confetti show={done && score >= 40} />
+      <div className="relative mx-auto max-w-md">
+        <Confetti show={done && score >= 50} />
         {fever && (
-          <div className="mb-3 animate-wiggle rounded-md border-[3px] border-ink bg-butter px-3 py-1 text-center text-xs font-extrabold uppercase tracking-wide">
-            Fever — gold rush, faster pops
-          </div>
+          <p className="mb-2 animate-pulse text-center text-sm font-black text-coral">FEVER — eject impostors!</p>
         )}
-        <div className={`mx-auto grid max-w-md grid-cols-3 gap-3 ${fever ? "brightness-110" : ""}`}>
-          {Array.from({ length: HOLES }, (_, i) => {
-            const mole = moles.find((m) => m.hole === i);
+        <div className={`grid grid-cols-3 gap-3 ${fever ? "rounded-xl bg-coral/20 p-2" : ""}`}>
+          {Array.from({ length: HOLES }, (_, hole) => {
+            const m = pops.find((x) => x.hole === hole);
             return (
               <button
-                key={i}
+                key={hole}
                 type="button"
-                onClick={() => whack(i)}
-                className="relative flex aspect-square items-end justify-center overflow-hidden rounded-xl border-[3px] border-ink bg-[#6b4f2a]"
-                style={{
-                  boxShadow: "3px 3px 0 var(--ink)",
-                  outline: mole?.kind === "gold" ? "3px solid #fbbf24" : mole?.kind === "bomb" ? "3px solid #f43f5e" : undefined,
-                }}
-                aria-label={mole ? `Whack ${mole.kind}` : "Empty hole"}
+                onClick={() => hit(hole)}
+                className="btn-chunky relative flex aspect-square items-center justify-center rounded-xl bg-ink text-4xl"
+                aria-label={m ? m.kind : "empty vent"}
               >
-                <span className="absolute bottom-1 h-5 w-4/5 rounded-full bg-[#3d2a14]" />
-                <span
-                  className={`absolute text-4xl transition-transform duration-100 sm:text-5xl ${
-                    mole ? "translate-y-0" : "translate-y-[120%]"
-                  }`}
-                >
-                  {mole?.face ?? "🐹"}
-                </span>
+                <span className="absolute inset-x-2 bottom-2 h-3 rounded-full bg-paper/20" />
+                {m && <span className="animate-bounce-soft relative z-10">{m.face}</span>}
               </button>
             );
           })}
         </div>
-        <p className="mt-3 min-h-[1.25rem] text-center text-sm font-bold text-ink/70">
-          {toast || "Gold = big points · Bombs hurt · Chain hits for fever"}
-        </p>
-        <div className="mt-4 text-center">
-          {!running && (
-            <>
-              <p className="mb-3 font-bold">
-                {done
-                  ? `Time! ${score} pts · best combo x${bestCombo}`
-                  : "35s of chaos. Skip bombs. Chase fever."}
-              </p>
-              <button type="button" onClick={start} className="btn-chunky rounded-md bg-[#ff8c42] px-5 py-2">
-                {done ? "Rematch" : "Start whacking"}
-              </button>
-            </>
-          )}
-        </div>
+        <p className="mt-3 text-center text-sm font-semibold text-ink/70">{toast}</p>
+        {!running && (
+          <div className="mt-4 text-center">
+            <button type="button" onClick={start} className="btn-chunky rounded-md bg-coral px-5 py-2 text-white">
+              {done ? "Another shift" : "Start hunt"}
+            </button>
+          </div>
+        )}
       </div>
     </GameShell>
   );
