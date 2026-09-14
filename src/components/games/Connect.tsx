@@ -7,6 +7,7 @@ import { playBonk, playTap, playWin } from "@/lib/sfx";
 
 type Cell = null | "R" | "Y";
 type Board = Cell[][];
+type Mode = "cpu" | "hotseat";
 
 const ROWS = 6;
 const COLS = 7;
@@ -16,11 +17,11 @@ function empty(): Board {
 }
 
 function drop(board: Board, col: number, who: Cell): Board | null {
-  if (board[0][col] !== null) return null;
+  if (board[0]![col] !== null) return null;
   const next = board.map((r) => [...r]);
   for (let r = ROWS - 1; r >= 0; r--) {
-    if (next[r][col] === null) {
-      next[r][col] = who;
+    if (next[r]![col] === null) {
+      next[r]![col] = who;
       return next;
     }
   }
@@ -36,14 +37,14 @@ function winner(board: Board): Cell | "draw" | null {
   ];
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      const start = board[r][c];
+      const start = board[r]![c];
       if (!start) continue;
       for (const [dr, dc] of dirs) {
         let ok = true;
         for (let k = 1; k < 4; k++) {
           const rr = r + dr * k;
           const cc = c + dc * k;
-          if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS || board[rr][cc] !== start) {
+          if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS || board[rr]![cc] !== start) {
             ok = false;
             break;
           }
@@ -65,28 +66,43 @@ function cpuMove(board: Board): number {
     const tryR = drop(board, c, "R");
     if (tryR && winner(tryR) === "R") return c;
   }
-  const mid = [3, 2, 4, 1, 5, 0, 6].filter((c) => board[0][c] === null);
+  const mid = [3, 2, 4, 1, 5, 0, 6].filter((c) => board[0]![c] === null);
   return mid[0] ?? 0;
 }
 
 export function ConnectGame({ onBack }: { onBack: () => void }) {
+  const [mode, setMode] = useState<Mode>("cpu");
   const [board, setBoard] = useState<Board>(() => empty());
+  const [turn, setTurn] = useState<"R" | "Y">("R");
   const [busy, setBusy] = useState(false);
   const result = winner(board);
+  const celebrate = result === "R" || (mode === "hotseat" && result === "Y");
 
-  const reset = () => {
+  const reset = (nextMode = mode) => {
+    setMode(nextMode);
     setBoard(empty());
+    setTurn("R");
     setBusy(false);
   };
 
   const play = (col: number) => {
     if (result || busy) return;
-    const after = drop(board, col, "R");
+    const who = mode === "cpu" ? "R" : turn;
+    const after = drop(board, col, who);
     if (!after) return;
     playTap();
     setBoard(after);
-    if (winner(after)) {
-      if (winner(after) === "R") playWin();
+    const w = winner(after);
+    if (w === "R" || w === "Y") {
+      playWin();
+      return;
+    }
+    if (w === "draw") {
+      playBonk();
+      return;
+    }
+    if (mode === "hotseat") {
+      setTurn(who === "R" ? "Y" : "R");
       return;
     }
     setBusy(true);
@@ -95,9 +111,9 @@ export function ConnectGame({ onBack }: { onBack: () => void }) {
         const colCpu = cpuMove(cur);
         const next = drop(cur, colCpu, "Y");
         if (!next) return cur;
-        const w = winner(next);
-        if (w === "Y") playBonk();
-        else if (w === "R") playWin();
+        const ww = winner(next);
+        if (ww === "Y") playBonk();
+        else if (ww === "R") playWin();
         return next;
       });
       setBusy(false);
@@ -110,18 +126,44 @@ export function ConnectGame({ onBack }: { onBack: () => void }) {
       accent="#f97316"
       ink="#fff"
       onBack={onBack}
-      stats={<span>{result === "R" ? "You!" : result === "Y" ? "CPU" : busy ? "…" : "Drop"}</span>}
+      stats={
+        <span>
+          {result === "R" ? (mode === "cpu" ? "You!" : "Red") : result === "Y" ? (mode === "cpu" ? "CPU" : "Yellow") : busy ? "…" : mode === "hotseat" ? turn : "Drop"}
+        </span>
+      }
     >
       <div className="relative">
-        <Confetti show={result === "R"} />
+        <Confetti show={celebrate} />
+        <div className="mb-3 flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            className={`btn-chunky rounded-md px-3 py-1.5 text-sm ${mode === "cpu" ? "bg-[#f97316] text-white" : "bg-paper"}`}
+            onClick={() => reset("cpu")}
+          >
+            vs CPU
+          </button>
+          <button
+            type="button"
+            className={`btn-chunky rounded-md px-3 py-1.5 text-sm ${mode === "hotseat" ? "bg-[#f97316] text-white" : "bg-paper"}`}
+            onClick={() => reset("hotseat")}
+          >
+            Hot-seat 2P
+          </button>
+        </div>
         <p className="mb-3 text-center font-bold">
           {result === "R"
-            ? "Four in a row — legend."
+            ? mode === "cpu"
+              ? "Four in a row — legend."
+              : "Red connects four!"
             : result === "Y"
-              ? "CPU connected. Rematch?"
+              ? mode === "cpu"
+                ? "CPU connected. Rematch?"
+                : "Yellow connects four!"
               : result === "draw"
                 ? "Draw. The board is full of drama."
-                : "You are red. Drop a disc."}
+                : mode === "hotseat"
+                  ? `${turn === "R" ? "Red" : "Yellow"} to drop.`
+                  : "You are red. Drop a disc."}
         </p>
         <div
           className="mx-auto grid max-w-md gap-1.5 rounded-xl border-[3px] border-ink bg-[#2563eb] p-2"
@@ -143,7 +185,7 @@ export function ConnectGame({ onBack }: { onBack: () => void }) {
           )}
         </div>
         <div className="mt-5 text-center">
-          <button type="button" onClick={reset} className="btn-chunky rounded-md bg-[#f97316] px-5 py-2 text-white">
+          <button type="button" onClick={() => reset()} className="btn-chunky rounded-md bg-[#f97316] px-5 py-2 text-white">
             New game
           </button>
         </div>

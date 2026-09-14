@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
-import { GAMES, TAGLINES, type GameId } from "@/lib/games";
+import { useMemo, useState } from "react";
+import { AuthButton, useAuthUser } from "@/components/AuthButton";
+import { GAMES, MODE_LABEL, TAGLINES, type GameId, type PlayMode } from "@/lib/games";
 import { playTap } from "@/lib/sfx";
 import { SnakeGame } from "@/components/games/Snake";
 import { MemoryGame } from "@/components/games/Memory";
@@ -23,6 +24,10 @@ import { FlappyGame } from "@/components/games/Flappy";
 import { MinesGame } from "@/components/games/Mines";
 import { DodgeGame } from "@/components/games/Dodge";
 import { RumbleGame } from "@/components/games/Rumble";
+import { ClaimcraftGame } from "@/components/games/Claimcraft";
+import { CrewCheckGame } from "@/components/games/CrewCheck";
+
+type Filter = "all" | PlayMode;
 
 function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
   switch (id) {
@@ -30,6 +35,10 @@ function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
       return <SlitherGame onBack={onBack} />;
     case "rumble":
       return <RumbleGame onBack={onBack} />;
+    case "claimcraft":
+      return <ClaimcraftGame onBack={onBack} />;
+    case "crewcheck":
+      return <CrewCheckGame onBack={onBack} />;
     case "snake":
       return <SnakeGame onBack={onBack} />;
     case "memory":
@@ -67,9 +76,20 @@ function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
   }
 }
 
+function matchesFilter(mode: PlayMode, filter: Filter) {
+  if (filter === "all") return true;
+  if (filter === "solo") return mode === "solo" || mode === "both";
+  if (filter === "local-multi") return mode === "local-multi" || mode === "both";
+  return mode === "both";
+}
+
 export function Dashboard() {
   const [active, setActive] = useState<GameId | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [user, setUser] = useAuthUser();
   const tagline = TAGLINES[0];
+
+  const visible = useMemo(() => GAMES.filter((g) => matchesFilter(g.mode, filter)), [filter]);
 
   if (active) {
     return (
@@ -91,7 +111,14 @@ export function Dashboard() {
         🎲
       </div>
 
-      <header className="mb-10 max-w-2xl">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <p className="rounded-md border-[3px] border-ink bg-butter px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em]">
+          Offline arcade · installable
+        </p>
+        <AuthButton user={user} onChange={setUser} />
+      </div>
+
+      <header className="mb-8 max-w-2xl">
         <div className="mb-4 flex items-center gap-3">
           <Image
             src="/logo.png"
@@ -101,8 +128,8 @@ export function Dashboard() {
             className="animate-bounce-soft chunky rounded-2xl bg-paper"
             priority
           />
-          <p className="inline-block animate-wiggle rounded-md border-[3px] border-ink bg-butter px-3 py-1 text-xs font-extrabold uppercase tracking-[0.18em]">
-            Instant boredom relief
+          <p className="inline-block animate-wiggle rounded-md border-[3px] border-ink bg-lime px-3 py-1 text-xs font-extrabold uppercase tracking-[0.18em]">
+            Competitive couch energy
           </p>
         </div>
         <h1 className="animate-pop-in font-[family-name:var(--font-display)] text-5xl leading-[1.05] tracking-wide text-ink sm:text-7xl">
@@ -114,13 +141,40 @@ export function Dashboard() {
         >
           {tagline}
         </p>
+        {user && (
+          <p className="mt-3 text-sm font-bold text-ink/70">
+            Playing as <span className="underline">{user.username}</span> — scores stay on this device.
+          </p>
+        )}
       </header>
 
-      <section
-        aria-label="Games"
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-      >
-        {GAMES.map((game, i) => (
+      <div className="mb-5 flex flex-wrap gap-2">
+        {(
+          [
+            ["all", "All games"],
+            ["solo", "Solo / offline"],
+            ["local-multi", "Local multi"],
+            ["both", "Solo + multi"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => {
+              playTap();
+              setFilter(id);
+            }}
+            className={`btn-chunky rounded-md px-3 py-1.5 text-sm font-extrabold ${
+              filter === id ? "bg-ink text-paper" : "bg-paper"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <section aria-label="Games" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {visible.map((game, i) => (
           <button
             key={game.id}
             type="button"
@@ -139,15 +193,12 @@ export function Dashboard() {
             <span className="absolute -right-1 -top-1 rotate-12 text-4xl drop-shadow-[2px_2px_0_rgba(22,20,31,0.25)] transition-transform group-hover:scale-110 group-hover:rotate-[18deg]">
               {game.sticker}
             </span>
-            <span className="mb-8 text-xs font-extrabold uppercase tracking-[0.16em] opacity-80">
-              {game.time}
+            <span className="mb-2 inline-flex rounded border-[2px] border-ink bg-paper px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-ink">
+              {MODE_LABEL[game.mode]}
             </span>
-            <span className="font-[family-name:var(--font-display)] text-3xl tracking-wide">
-              {game.title}
-            </span>
-            <span className="mt-2 pr-8 text-sm font-semibold leading-snug opacity-90">
-              {game.blurb}
-            </span>
+            <span className="mb-6 text-xs font-extrabold uppercase tracking-[0.16em] opacity-80">{game.time}</span>
+            <span className="font-[family-name:var(--font-display)] text-3xl tracking-wide">{game.title}</span>
+            <span className="mt-2 pr-8 text-sm font-semibold leading-snug opacity-90">{game.blurb}</span>
             <span className="mt-6 inline-flex items-center gap-2 rounded-md border-[3px] border-ink bg-paper px-3 py-1.5 text-sm font-extrabold text-ink transition-transform group-hover:translate-x-0.5">
               Play →
             </span>
@@ -155,8 +206,9 @@ export function Dashboard() {
         ))}
       </section>
 
-      <footer className="mt-auto pt-12 text-sm font-semibold text-ink/55">
-        Local-only fun. Add to Home Screen for pocket arcade mode.
+      <footer className="mt-auto space-y-2 pt-12 text-sm font-semibold text-ink/55">
+        <p>Works offline after install · local login · Synk ID coming soon.</p>
+        <p>Tip: browser menu → Install / Add to Home Screen for the pocket arcade.</p>
       </footer>
     </main>
   );
