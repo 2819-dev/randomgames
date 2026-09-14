@@ -8,10 +8,11 @@ import {
   createRoom,
   fetchRoomBundle,
   joinRoom,
+  listPublicRooms,
   setReady,
   subscribeRoom,
 } from "@/lib/multiplayer";
-import type { Profile, Room, RoomStatus } from "@/lib/supabase";
+import type { Profile, PublicLobby, Room, RoomStatus } from "@/lib/supabase";
 import { playTap } from "@/lib/sfx";
 
 export type MatchPlayer = {
@@ -71,6 +72,9 @@ export function OnlineMatch({
   const [codeInput, setCodeInput] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [makePublic, setMakePublic] = useState(true);
+  const [lobbies, setLobbies] = useState<PublicLobby[]>([]);
+  const [lobbiesLoading, setLobbiesLoading] = useState(false);
 
   const refresh = useCallback(async (roomId: string) => {
     const bundle = await fetchRoomBundle(roomId);
@@ -84,6 +88,17 @@ export function OnlineMatch({
       })),
     );
   }, []);
+
+  const refreshLobbies = useCallback(async () => {
+    setLobbiesLoading(true);
+    try {
+      setLobbies(await listPublicRooms(gameId));
+    } catch {
+      /* browse is best-effort */
+    } finally {
+      setLobbiesLoading(false);
+    }
+  }, [gameId]);
 
   useEffect(() => {
     if (!room?.id) return;
@@ -101,6 +116,13 @@ export function OnlineMatch({
     };
   }, [room?.id, refresh]);
 
+  useEffect(() => {
+    if (room) return;
+    void refreshLobbies();
+    const id = window.setInterval(() => void refreshLobbies(), 5000);
+    return () => window.clearInterval(id);
+  }, [room, refreshLobbies]);
+
   const me = useMemo(
     () => players.find((p) => p.user_id === user?.id) || null,
     [players, user?.id],
@@ -112,7 +134,7 @@ export function OnlineMatch({
     setBusy(true);
     setError("");
     try {
-      const created = await createRoom(gameId, maxPlayers);
+      const created = await createRoom(gameId, maxPlayers, { isPublic: makePublic });
       setRoom(created);
       await refresh(created.id);
       playTap();
@@ -123,12 +145,12 @@ export function OnlineMatch({
     }
   };
 
-  const guestJoin = async () => {
+  const guestJoin = async (code?: string) => {
     if (!user) return;
     setBusy(true);
     setError("");
     try {
-      const joined = await joinRoom(codeInput);
+      const joined = await joinRoom(code ?? codeInput);
       setRoom(joined);
       await refresh(joined.id);
       playTap();
@@ -218,16 +240,33 @@ export function OnlineMatch({
           </button>
         </div>
         <p className="mb-4 text-sm font-semibold text-ink/70">
-          Start a match and share the invite code — or jump into a friend&apos;s game.
+          Host a public or private lobby — or browse open servers.
         </p>
+
+        <label className="mb-3 flex cursor-pointer items-center justify-between gap-3 rounded-md border-[3px] border-ink bg-white px-3 py-2.5">
+          <span className="text-sm font-extrabold">Make Public</span>
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-lime"
+            checked={makePublic}
+            onChange={(e) => setMakePublic(e.target.checked)}
+          />
+        </label>
+        <p className="mb-3 text-xs font-semibold text-ink/55">
+          {makePublic
+            ? "Anyone can find this lobby under Browse Servers."
+            : "Private — join only with the invite code."}
+        </p>
+
         <button
           type="button"
           disabled={busy}
           className="btn-chunky w-full rounded-md bg-lime px-4 py-3 font-extrabold disabled:opacity-50"
           onClick={() => void hostCreate()}
         >
-          Start a match
+          Create match
         </button>
+
         <div className="mt-4 flex gap-2">
           <input
             className="w-full rounded-md border-[3px] border-ink bg-white px-3 py-2 font-bold uppercase tracking-widest outline-none"
@@ -245,6 +284,53 @@ export function OnlineMatch({
             Join
           </button>
         </div>
+
+        <div className="mt-6 border-t-[3px] border-ink/20 pt-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="font-[family-name:var(--font-display)] text-lg">Browse Servers</h3>
+            <button
+              type="button"
+              disabled={lobbiesLoading}
+              className="btn-chunky rounded-md bg-paper px-2.5 py-1 text-xs font-bold disabled:opacity-50"
+              onClick={() => void refreshLobbies()}
+            >
+              {lobbiesLoading ? "…" : "Refresh"}
+            </button>
+          </div>
+          {lobbies.length === 0 ? (
+            <p className="rounded-md border-[3px] border-dashed border-ink/30 px-3 py-4 text-center text-sm font-semibold text-ink/50">
+              No public lobbies right now. Create one above!
+            </p>
+          ) : (
+            <ul className="max-h-56 space-y-2 overflow-y-auto">
+              {lobbies.map((lobby) => {
+                const full = lobby.player_count >= lobby.max_players;
+                return (
+                  <li
+                    key={lobby.id}
+                    className="flex items-center justify-between gap-2 rounded-md border-[3px] border-ink bg-white px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-extrabold">{lobby.host_display_name}&apos;s lobby</p>
+                      <p className="text-xs font-semibold text-ink/60">
+                        {lobby.code} · {lobby.player_count}/{lobby.max_players}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy || full}
+                      className="btn-chunky shrink-0 rounded-md bg-sky px-3 py-1.5 text-sm font-extrabold text-white disabled:opacity-40"
+                      onClick={() => void guestJoin(lobby.code)}
+                    >
+                      {full ? "Full" : "Join"}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
         {error && (
           <p className="mt-3 rounded-md border-[3px] border-ink bg-coral/20 px-3 py-2 text-sm font-bold">{error}</p>
         )}
@@ -269,12 +355,16 @@ export function OnlineMatch({
             Leave
           </button>
         </div>
-        <p className="mb-4 text-center text-sm font-bold">
+        <p className="mb-1 text-center text-sm font-bold">
           Invite code{" "}
           <span className="rounded-md border-[3px] border-ink bg-butter px-2 py-1 font-[family-name:var(--font-display)] text-xl tracking-widest">
             {room.code}
           </span>
         </p>
+        {room.is_public && (
+          <p className="mb-4 text-center text-xs font-bold text-lime-800">Listed in Browse Servers</p>
+        )}
+        {!room.is_public && <div className="mb-4" />}
         <ul className="mb-4 space-y-2">
           {players.map((p) => (
             <li

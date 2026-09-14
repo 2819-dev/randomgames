@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Confetti } from "@/components/Confetti";
 import { OnlineMatch, type MatchContext, type MatchPlayer } from "@/components/OnlineMatch";
+import type { Room } from "@/lib/supabase";
 import { beep, playBonk, playTap, playWin } from "@/lib/sfx";
 import { shuffle } from "@/lib/random";
 
@@ -573,7 +574,7 @@ function CrewBoard({ room, me, commit }: MatchContext) {
       )}
 
       <p className="text-center text-xs font-semibold text-ink/55">
-        Live multiplayer on every phone. Staff finish closing; Glitches trash the shift.
+        Staff finish closing jobs. Glitches delete the shift. Move, task, report, vote.
       </p>
     </div>
   );
@@ -703,16 +704,422 @@ function TaskPanel({
   );
 }
 
-export function CrewCheckGame({ onBack }: { onBack: () => void }) {
+const BOT_NAMES = ["Rivet", "Token", "Plush", "Cabinet", "Till", "Dockbot", "Neon", "Joystick"];
+const HUMAN_ID = "local-you";
+
+function pickBotAction(s: CrewState, bot: CrewPlayer): CrewState | null {
+  const now = Date.now();
+  if (!bot.alive || s.phase === "done") return null;
+
+  if (s.phase === "meeting") {
+    // Any seat can open voting after a short huddle.
+    if (now - (bot.lastActionAt || 0) > 2200) {
+      return { ...s, phase: "vote", votes: {}, log: "Voting opens." };
+    }
+    return null;
+  }
+
+  if (s.phase === "vote") {
+    if (s.votes[bot.userId] !== undefined) return null;
+    const aliveOthers = s.players.filter((p) => p.alive && p.userId !== bot.userId);
+    let target: string | "skip" = "skip";
+    if (bot.glitch) {
+      // Glitches try to eject staff, prefer someone not themselves.
+      const staff = aliveOthers.filter((p) => !p.glitch);
+      target = staff[Math.floor(Math.random() * staff.length)]?.userId ?? "skip";
+    } else {
+      // Staff: slight bias toward quieter / less-tasked players as "suspicious".
+      const ranked = [...aliveOthers].sort((a, b) => a.tasksDone - b.tasksDone);
+      if (Math.random() < 0.65 && ranked[0]) target = ranked[0].userId;
+      else target = "skip";
+    }
+    const votes = { ...s.votes, [bot.userId]: target };
+    const alive = s.players.filter((p) => p.alive);
+    if (alive.every((p) => votes[p.userId] !== undefined)) {
+      return resolveVotes({ ...s, votes });
+    }
+    return { ...s, votes };
+  }
+
+  if (s.phase !== "play") return null;
+  if (now - bot.lastActionAt < ACTION_MS + 200) return null;
+
+  // Report body in room
+  const body = s.bodies.find((b) => b.room === bot.room);
+  if (body && !bot.glitch) {
+    return {
+      ...s,
+      phase: "meeting",
+      bodies: s.bodies.filter((b) => b.room !== bot.room),
+      meetingCaller: bot.name,
+      votes: {},
+      log: `${bot.name} found ${body.name} in ${ROOMS[bot.room].label}!`,
+    };
+  }
+
+  if (bot.glitch) {
+    const staffHere = s.players.filter((p) => p.alive && !p.glitch && p.room === bot.room);
+    if (staffHere.length === 1 && now >= bot.killReadyAt) {
+      const v = staffHere[0]!;
+      return {
+        ...s,
+        players: s.players.map((x) => {
+          if (x.userId === v.userId) return { ...x, alive: false };
+          if (x.userId === bot.userId) return { ...x, killReadyAt: now + KILL_MS, lastActionAt: now };
+          return x;
+        }),
+        bodies: [...s.bodies, { victimId: v.userId, room: v.room, name: v.name }],
+        log: "Someone was deleted from the shift…",
+      };
+    }
+    if (!s.sabotage && Math.random() < 0.12) {
+      const kind = Math.random() < 0.5 ? ("power" as const) : ("alarm" as const);
+      return {
+        ...s,
+        sabotage: { kind, endsAt: now + SABOTAGE_MS },
+        players: s.players.map((x) => (x.userId === bot.userId ? { ...x, lastActionAt: now } : x)),
+        log: kind === "power" ? "🚨 POWER OUT — fix Tickets or Machine Floor!" : "🚨 ALARM — silence it in Lobby or Dock!",
+      };
+    }
+  } else {
+    // Staff tasks / fix sabotage
+    const powerOut = s.sabotage?.kind === "power";
+    const canTask = !(powerOut && bot.room !== "tickets" && bot.room !== "floor");
+    if (canTask && Math.random() < 0.55) {
+      let sab = s.sabotage;
+      let log = `${bot.name} finished ${ROOMS[bot.room].task}.`;
+      if (sab?.kind === "power" && (bot.room === "tickets" || bot.room === "floor")) {
+        sab = null;
+        log = `${bot.name} restored power!`;
+      }
+      if (sab?.kind === "alarm" && (bot.room === "dock" || bot.room === "lobby")) {
+        sab = null;
+        log = `${bot.name} silenced the alarm!`;
+      }
+      return {
+        ...s,
+        sabotage: sab,
+        players: s.players.map((x) =>
+          x.userId === bot.userId ? { ...x, tasksDone: x.tasksDone + 1, lastActionAt: now } : x,
+        ),
+        log,
+      };
+    }
+  }
+
+  // Move
+  let neighbors = ROOMS[bot.room].neighbors;
+  if (bot.glitch) {
+    // Chase nearest staff room if possible
+    const staffRooms = new Set(s.players.filter((p) => p.alive && !p.glitch).map((p) => p.room));
+    const chase = neighbors.filter((r) => staffRooms.has(r));
+    if (chase.length) neighbors = chase;
+  } else if (s.sabotage?.kind === "power") {
+    const fix = neighbors.filter((r) => r === "tickets" || r === "floor");
+    if (fix.length) neighbors = fix;
+    else if (bot.room !== "tickets" && bot.room !== "floor") {
+      // Prefer moving toward floor/tickets via any neighbor
+      neighbors = [...neighbors].sort((a, b) => {
+        const score = (id: RoomId) => (id === "tickets" || id === "floor" ? 0 : 1);
+        return score(a) - score(b);
+      });
+    }
+  } else if (s.sabotage?.kind === "alarm") {
+    const fix = neighbors.filter((r) => r === "lobby" || r === "dock");
+    if (fix.length) neighbors = fix;
+  } else if (s.bodies.length && !bot.glitch) {
+    const bodyRooms = new Set(s.bodies.map((b) => b.room));
+    const toward = neighbors.filter((r) => bodyRooms.has(r));
+    if (toward.length) neighbors = toward;
+  }
+
+  const nextRoom = neighbors[Math.floor(Math.random() * neighbors.length)];
+  if (!nextRoom) return null;
+  return {
+    ...s,
+    players: s.players.map((x) =>
+      x.userId === bot.userId ? { ...x, room: nextRoom, lastActionAt: now } : x,
+    ),
+    log: `${bot.name} → ${ROOMS[nextRoom].label}`,
+  };
+}
+
+function resolveVotes(cur: CrewState): CrewState {
+  const tallies = new Map<string, number>();
+  for (const t of Object.values(cur.votes)) tallies.set(t, (tallies.get(t) ?? 0) + 1);
+  let best = "skip";
+  let bestN = -1;
+  let tie = false;
+  for (const [id, n] of tallies) {
+    if (n > bestN) {
+      best = id;
+      bestN = n;
+      tie = false;
+    } else if (n === bestN) tie = true;
+  }
+  if (tie || best === "skip") {
+    return { ...cur, phase: "play", meetingCaller: null, votes: {}, log: "No consensus — back to closing." };
+  }
+  const ejected = cur.players.find((p) => p.userId === best);
+  if (!ejected) return { ...cur, phase: "play", meetingCaller: null, votes: {}, log: "Vote fizzled." };
+  return {
+    ...cur,
+    phase: "play",
+    players: cur.players.map((p) => (p.userId === best ? { ...p, alive: false } : p)),
+    meetingCaller: null,
+    votes: {},
+    log: `${ejected.name} ejected — ${ejected.glitch ? "was a GLITCH" : "was staff"}.`,
+  };
+}
+
+function advanceBots(s: CrewState, humanId: string): CrewState {
+  if (s.phase === "done") return s;
+  let cur = s;
+  const bots = cur.players.filter((p) => p.userId !== humanId && p.alive);
+  // One action per tick from a random bot (keeps pace readable)
+  const order = shuffle(bots);
+  for (const bot of order) {
+    const next = pickBotAction(cur, bot);
+    if (next) {
+      cur = withWins(next);
+      break;
+    }
+  }
+  // Auto-resolve votes if everyone but somehow stuck
+  if (cur.phase === "vote") {
+    const alive = cur.players.filter((p) => p.alive);
+    if (alive.every((p) => cur.votes[p.userId] !== undefined)) {
+      cur = withWins(resolveVotes(cur));
+    }
+  }
+  return cur;
+}
+
+function OfflineCrewMatch({
+  onBack,
+  totalPlayers,
+}: {
+  onBack: () => void;
+  totalPlayers: number;
+}) {
+  const matchPlayers: MatchPlayer[] = useMemo(() => {
+    const list: MatchPlayer[] = [
+      {
+        user_id: HUMAN_ID,
+        seat: 0,
+        ready: true,
+        profile: { id: HUMAN_ID, username: "you", display_name: "You" },
+      },
+    ];
+    for (let i = 1; i < totalPlayers; i++) {
+      const name = BOT_NAMES[(i - 1) % BOT_NAMES.length]!;
+      list.push({
+        user_id: `bot-${i}`,
+        seat: i,
+        ready: true,
+        profile: { id: `bot-${i}`, username: name.toLowerCase(), display_name: name },
+      });
+    }
+    return list;
+  }, [totalPlayers]);
+
+  const [room, setRoom] = useState<Room>(() => {
+    const initial = buildInitialState(matchPlayers);
+    return {
+      id: "offline",
+      code: "OFFLIN",
+      game_id: "crewcheck",
+      host_id: HUMAN_ID,
+      status: "playing",
+      max_players: totalPlayers,
+      is_public: false,
+      state: initial,
+      version: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  });
+
+  const me = matchPlayers[0]!;
+
+  const commit = useCallback(
+    async (
+      mutate: (state: Record<string, unknown>) => Record<string, unknown> | null,
+      status?: Room["status"],
+    ) => {
+      setRoom((prev) => {
+        const nextState = mutate(structuredClone(prev.state) as Record<string, unknown>);
+        if (!nextState) return prev;
+        return {
+          ...prev,
+          state: withWins(parse(nextState)) as unknown as Record<string, unknown>,
+          status: status ?? prev.status,
+          version: prev.version + 1,
+          updated_at: new Date().toISOString(),
+        };
+      });
+    },
+    [],
+  );
+
+  const pushState = useCallback(async (state: Record<string, unknown>, status?: Room["status"]) => {
+    setRoom((prev) => ({
+      ...prev,
+      state: withWins(parse(state)) as unknown as Record<string, unknown>,
+      status: status ?? prev.status,
+      version: prev.version + 1,
+      updated_at: new Date().toISOString(),
+    }));
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setRoom((prev) => {
+        if (prev.status !== "playing") return prev;
+        const cur = parse(prev.state);
+        if (cur.phase === "done") return prev;
+        const next = advanceBots(cur, HUMAN_ID);
+        if (next === cur) {
+          // Still check sabotage timeout
+          const checked = withWins(cur);
+          if (checked === cur) return prev;
+          return {
+            ...prev,
+            state: checked as unknown as Record<string, unknown>,
+            version: prev.version + 1,
+            updated_at: new Date().toISOString(),
+          };
+        }
+        return {
+          ...prev,
+          state: next as unknown as Record<string, unknown>,
+          version: prev.version + 1,
+          updated_at: new Date().toISOString(),
+        };
+      });
+    }, 1100);
+    return () => window.clearInterval(id);
+  }, []);
+
   return (
-    <OnlineMatch
-      gameId="crewcheck"
-      title="Crew Check"
-      minPlayers={4}
-      maxPlayers={8}
-      onBack={onBack}
-      buildInitialState={buildInitialState}
-      renderGame={(ctx) => <CrewBoard {...ctx} />}
-    />
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <button type="button" className="btn-chunky rounded-md bg-paper px-3 py-1.5 text-sm" onClick={onBack}>
+          ← Leave game
+        </button>
+        <p className="text-sm font-bold">Crew Check · Offline bots</p>
+      </div>
+      <CrewBoard
+        room={room}
+        players={matchPlayers}
+        me={me}
+        isHost
+        pushState={pushState}
+        commit={commit}
+      />
+    </div>
+  );
+}
+
+export function CrewCheckGame({ onBack }: { onBack: () => void }) {
+  const [mode, setMode] = useState<"pick" | "online" | "offline-setup" | "offline">("pick");
+  const [botPlayers, setBotPlayers] = useState(5);
+
+  if (mode === "online") {
+    return (
+      <OnlineMatch
+        gameId="crewcheck"
+        title="Crew Check"
+        minPlayers={4}
+        maxPlayers={8}
+        onBack={() => setMode("pick")}
+        buildInitialState={buildInitialState}
+        renderGame={(ctx) => <CrewBoard {...ctx} />}
+      />
+    );
+  }
+
+  if (mode === "offline") {
+    return <OfflineCrewMatch onBack={() => setMode("pick")} totalPlayers={botPlayers} />;
+  }
+
+  if (mode === "offline-setup") {
+    return (
+      <div className="chunky-lg mx-auto max-w-lg rounded-xl bg-paper p-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="font-[family-name:var(--font-display)] text-2xl">Offline with bots</h2>
+          <button type="button" className="btn-chunky rounded-md bg-paper px-3 py-1.5 text-sm" onClick={() => setMode("pick")}>
+            ← Back
+          </button>
+        </div>
+        <p className="mb-4 text-sm font-semibold text-ink/70">
+          You plus bots on one device. Practice the night shift without a lobby.
+        </p>
+        <label className="mb-2 block text-sm font-extrabold">Players (you + bots)</label>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[4, 5, 6, 7, 8].map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`btn-chunky rounded-md px-4 py-2 font-extrabold ${botPlayers === n ? "bg-lime" : "bg-white"}`}
+              onClick={() => setBotPlayers(n)}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        <p className="mb-4 text-xs font-semibold text-ink/55">
+          {botPlayers - 1} bots · {botPlayers >= 7 ? "2 glitches" : "1 glitch"}
+        </p>
+        <button
+          type="button"
+          className="btn-chunky w-full rounded-md bg-coral px-4 py-3 font-extrabold text-white"
+          onClick={() => {
+            playTap();
+            setMode("offline");
+          }}
+        >
+          Start shift
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="chunky-lg mx-auto max-w-lg rounded-xl bg-paper p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="font-[family-name:var(--font-display)] text-2xl">Crew Check</h2>
+        <button type="button" className="btn-chunky rounded-md bg-paper px-3 py-1.5 text-sm" onClick={onBack}>
+          ← Back
+        </button>
+      </div>
+      <p className="mb-5 text-sm font-semibold text-ink/70">
+        Box Arcade night shift — finish closing jobs, or get deleted by glitches.
+      </p>
+      <div className="space-y-3">
+        <button
+          type="button"
+          className="btn-chunky w-full rounded-md bg-lime px-4 py-3 text-left font-extrabold"
+          onClick={() => {
+            playTap();
+            setMode("online");
+          }}
+        >
+          <span className="block text-base">Online multiplayer</span>
+          <span className="block text-xs font-semibold opacity-80">Create, browse public servers, or join a code</span>
+        </button>
+        <button
+          type="button"
+          className="btn-chunky w-full rounded-md bg-butter px-4 py-3 text-left font-extrabold"
+          onClick={() => {
+            playTap();
+            setMode("offline-setup");
+          }}
+        >
+          <span className="block text-base">Offline with bots</span>
+          <span className="block text-xs font-semibold opacity-80">Solo practice — no account needed</span>
+        </button>
+      </div>
+    </div>
   );
 }

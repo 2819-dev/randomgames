@@ -29,10 +29,20 @@ export type Room = {
   host_id: string;
   status: RoomStatus;
   max_players: number;
+  is_public?: boolean;
   state: Record<string, unknown>;
   version: number;
   created_at: string;
   updated_at: string;
+};
+
+export type PublicLobby = {
+  id: string;
+  code: string;
+  host_display_name: string;
+  player_count: number;
+  max_players: number;
+  created_at: string;
 };
 
 export type RoomPlayer = {

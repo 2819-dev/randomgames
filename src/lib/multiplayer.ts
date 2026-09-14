@@ -1,18 +1,31 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { supabase, type Room, type RoomPlayer, type RoomStatus } from "./supabase";
+import { supabase, type PublicLobby, type Room, type RoomPlayer, type RoomStatus } from "./supabase";
 
 export type RoomBundle = {
   room: Room;
   players: RoomPlayer[];
 };
 
-export async function createRoom(gameId: string, maxPlayers: number): Promise<Room> {
+export async function createRoom(
+  gameId: string,
+  maxPlayers: number,
+  options?: { isPublic?: boolean },
+): Promise<Room> {
   const { data, error } = await supabase.rpc("create_room", {
     p_game_id: gameId,
     p_max_players: maxPlayers,
+    p_is_public: options?.isPublic ?? false,
   });
   if (error) throw error;
   return data as Room;
+}
+
+export async function listPublicRooms(gameId: string): Promise<PublicLobby[]> {
+  const { data, error } = await supabase.rpc("list_public_rooms", {
+    p_game_id: gameId,
+  });
+  if (error) throw error;
+  return (data ?? []) as PublicLobby[];
 }
 
 export async function joinRoom(code: string): Promise<Room> {
