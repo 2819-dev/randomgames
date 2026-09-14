@@ -7,7 +7,7 @@ import type { Room } from "@/lib/supabase";
 import { beep, playBonk, playTap, playWin } from "@/lib/sfx";
 import { shuffle } from "@/lib/random";
 
-/** Flat 2D arcade map + gumdrop crew. Among Us DNA — own identity. */
+/** Real CSS-3D arcade map + candy gumdrop crew. Among Us DNA — own identity. */
 
 type RoomId = "lobby" | "prizes" | "tickets" | "floor" | "break" | "dock";
 type Phase = "play" | "meeting" | "vote" | "done";
@@ -80,14 +80,6 @@ const DUCTS: Partial<Record<RoomId, RoomId[]>> = {
 
 const ROOM_ORDER: RoomId[] = ["lobby", "prizes", "tickets", "floor", "break", "dock"];
 
-const MAP_POS: Record<RoomId, { x: number; y: number; w: number; h: number }> = {
-  lobby: { x: 4, y: 4, w: 28, h: 28 },
-  prizes: { x: 36, y: 4, w: 28, h: 22 },
-  tickets: { x: 68, y: 4, w: 28, h: 28 },
-  break: { x: 4, y: 38, w: 24, h: 26 },
-  floor: { x: 34, y: 32, w: 32, h: 36 },
-  dock: { x: 70, y: 40, w: 26, h: 28 },
-};
 
 const BOT_NAMES = ["Rivet", "Token", "Plush", "Cabinet", "Till", "Dockbot", "Neon", "Joystick"];
 const HUMAN_ID = "local-you";
@@ -204,6 +196,7 @@ function apparent(p: CrewPlayer, all: CrewPlayer[], viewerId: string, now: numbe
   return { color: p.color, name: p.name };
 }
 
+/** Candy gumdrop — sugar-dome candy, not a crewmate bean. */
 function Gumdrop({
   color,
   size = 36,
@@ -218,25 +211,59 @@ function Gumdrop({
   label?: string;
 }) {
   const h = size;
-  const w = Math.round(size * 0.82);
+  const w = Math.round(size * 0.78);
+  const fill = dead ? "#9ca3af" : color;
+  const gid = `gd-${color.replace("#", "")}-${size}-${dead ? "d" : "a"}-${label ?? "x"}`.replace(/\s+/g, "");
   return (
     <span className="inline-flex flex-col items-center" style={{ opacity: ghost ? 0.45 : 1 }} title={label}>
-      <svg width={w} height={h} viewBox="0 0 44 54" aria-hidden>
-        <ellipse cx="8" cy="28" rx="7" ry="11" fill={color} stroke="#111" strokeWidth="2.2" opacity={dead ? 0.5 : 1} />
-        <ellipse cx="24" cy="26" rx="16" ry="20" fill={dead ? "#9ca3af" : color} stroke="#111" strokeWidth="2.4" />
-        <ellipse cx="28" cy="24" rx="10" ry="9" fill={dead ? "#cbd5e1" : "#dff6ff"} stroke="#111" strokeWidth="2" />
-        <ellipse cx="30" cy="22" rx="3.5" ry="3" fill="white" opacity="0.85" />
+      <svg width={w} height={h} viewBox="0 0 40 48" aria-hidden>
+        <defs>
+          <radialGradient id={gid} cx="35%" cy="28%" r="70%">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.75" />
+            <stop offset="35%" stopColor={fill} stopOpacity="0.95" />
+            <stop offset="100%" stopColor={fill} />
+          </radialGradient>
+        </defs>
+        {/* soft ground shadow */}
+        <ellipse cx="20" cy="44" rx="12" ry="3.2" fill="#111" opacity="0.18" />
+        {/* classic gumdrop dome */}
+        <path
+          d="M20 4 C10 4 5 16 5 28 C5 38 11 44 20 44 C29 44 35 38 35 28 C35 16 30 4 20 4 Z"
+          fill={`url(#${gid})`}
+          stroke="#111"
+          strokeWidth="2.2"
+        />
+        {/* sugar sparkle */}
         {!dead && (
           <>
-            <rect x="14" y="42" width="8" height="9" rx="3" fill={color} stroke="#111" strokeWidth="2" />
-            <rect x="26" y="42" width="8" height="9" rx="3" fill={color} stroke="#111" strokeWidth="2" />
+            <circle cx="14" cy="16" r="1.4" fill="#fff" opacity="0.9" />
+            <circle cx="22" cy="12" r="0.9" fill="#fff" opacity="0.7" />
+            <circle cx="26" cy="20" r="1.1" fill="#fff" opacity="0.55" />
           </>
         )}
-        {dead && <path d="M16 20 L32 32 M32 20 L16 32" stroke="#111" strokeWidth="2.5" strokeLinecap="round" />}
+        {/* tiny candy face for readability */}
+        {!dead && (
+          <>
+            <circle cx="15" cy="26" r="1.6" fill="#111" />
+            <circle cx="25" cy="26" r="1.6" fill="#111" />
+            <path d="M16 32 Q20 35 24 32" fill="none" stroke="#111" strokeWidth="1.4" strokeLinecap="round" />
+          </>
+        )}
+        {dead && <path d="M14 22 L26 34 M26 22 L14 34" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />}
       </svg>
     </span>
   );
 }
+
+/** CSS 3D room layout — real perspective scene, not a flat schematic. */
+const ROOM_3D: Record<RoomId, { x: number; z: number; w: number; d: number; floor: string; wall: string }> = {
+  lobby: { x: -170, z: -140, w: 150, d: 120, floor: "#f5d76e", wall: "#e8b923" },
+  prizes: { x: 20, z: -150, w: 140, d: 100, floor: "#f9a8d4", wall: "#db2777" },
+  tickets: { x: 190, z: -140, w: 140, d: 120, floor: "#93c5fd", wall: "#2563eb" },
+  break: { x: -170, z: 20, w: 130, d: 120, floor: "#86efac", wall: "#16a34a" },
+  floor: { x: 0, z: 10, w: 170, d: 150, floor: "#c4b5fd", wall: "#7c3aed" },
+  dock: { x: 200, z: 40, w: 140, d: 130, floor: "#fdba74", wall: "#ea580c" },
+};
 
 function ArcadeMap({
   s,
@@ -253,70 +280,151 @@ function ArcadeMap({
   onMove: (id: RoomId) => void;
   disabled: boolean;
 }) {
-  return (
-    <div className="overflow-hidden rounded-xl border-[3px] border-ink bg-[#1a2744]">
-      <div className="flex items-center justify-between px-3 py-2 text-white">
-        <p className="text-xs font-black tracking-wide">BOX ARCADE · FLOOR PLAN</p>
-        <p className="text-[10px] font-bold opacity-70">2D schematic</p>
-      </div>
-      <svg viewBox="0 0 100 78" className="h-auto w-full" role="img" aria-label="Arcade floor plan">
-        <rect x="28" y="14" width="12" height="6" fill="#2a3d66" />
-        <rect x="60" y="14" width="12" height="6" fill="#2a3d66" />
-        <rect x="16" y="30" width="6" height="10" fill="#2a3d66" />
-        <rect x="46" y="24" width="6" height="10" fill="#2a3d66" />
-        <rect x="62" y="48" width="10" height="6" fill="#2a3d66" />
-        <rect x="48" y="58" width="24" height="5" fill="#2a3d66" />
-        <path d="M78 30 L78 42 L82 42" fill="none" stroke="#fbbf24" strokeWidth="0.8" strokeDasharray="1.5 1.2" opacity="0.7" />
-        <path d="M50 55 L72 55 L72 48" fill="none" stroke="#fbbf24" strokeWidth="0.8" strokeDasharray="1.5 1.2" opacity="0.7" />
+  const [tilt, setTilt] = useState(58);
+  const [yaw, setYaw] = useState(-28);
+  const groundStyle = {
+    width: 520,
+    height: 420,
+    transform: "translate(-50%, -50%) translateZ(-2px)",
+  };
+  const worldStyle = {
+    transform: `translate(-50%, -50%) rotateX(${tilt}deg) rotateZ(${yaw}deg)`,
+  };
 
-        {ROOM_ORDER.map((id) => {
-          const pos = MAP_POS[id];
-          const meta = ROOMS[id];
-          const here = s.players.filter((p) => p.alive && p.room === id);
-          const body = s.bodies.some((b) => b.room === id);
-          const canWalk = self.alive && ROOMS[self.room].neighbors.includes(id);
-          const isHere = self.room === id;
-          return (
-            <g key={id}>
-              <rect
-                x={pos.x}
-                y={pos.y}
-                width={pos.w}
-                height={pos.h}
-                rx={2.5}
-                fill={isHere ? "#fde68a" : canWalk ? "#e2e8f0" : "#94a3b8"}
-                stroke="#0f172a"
-                strokeWidth={isHere ? 1.4 : 1}
-                className={!disabled && canWalk ? "cursor-pointer" : undefined}
-                onClick={() => {
-                  if (!disabled && canWalk) onMove(id);
-                }}
-              />
-              <text x={pos.x + 1.5} y={pos.y + 4.5} fontSize="3.2" fontWeight="800" fill="#111">
-                {meta.emoji} {meta.label}
-              </text>
-              {body && (
-                <text x={pos.x + pos.w - 5} y={pos.y + 5} fontSize="4">
-                  💀
-                </text>
-              )}
-              {here.map((p, i) => {
-                const look = apparent(p, s.players, self.userId, now);
-                const hideFace = powerOut && p.userId !== self.userId;
-                const cx = pos.x + 5 + (i % 4) * 6.5;
-                const cy = pos.y + 10 + Math.floor(i / 4) * 9;
-                return (
-                  <g key={p.userId} transform={`translate(${cx}, ${cy})`}>
-                    <ellipse cx="2.2" cy="3.2" rx="2.4" ry="3.1" fill={hideFace ? "#334155" : look.color} stroke="#111" strokeWidth="0.45" />
-                    <ellipse cx="2.8" cy="2.9" rx="1.3" ry="1.15" fill={hideFace ? "#64748b" : "#e0f2fe"} stroke="#111" strokeWidth="0.35" />
-                    {p.userId === self.userId && <circle cx="2.2" cy="-1.2" r="0.7" fill="#22c55e" stroke="#111" strokeWidth="0.3" />}
-                  </g>
-                );
-              })}
-            </g>
-          );
-        })}
-      </svg>
+  return (
+    <div className="overflow-hidden rounded-xl border-[3px] border-ink bg-gradient-to-b from-[#0f172a] via-[#1e293b] to-[#334155]">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-white">
+        <p className="text-xs font-black tracking-wide">BOX ARCADE · 3D MAP</p>
+        <div className="flex items-center gap-2 text-[10px] font-bold">
+          <label className="flex items-center gap-1 opacity-80">
+            tilt
+            <input
+              type="range"
+              min={40}
+              max={70}
+              value={tilt}
+              onChange={(e) => setTilt(Number(e.target.value))}
+              className="w-16 accent-butter"
+            />
+          </label>
+          <label className="flex items-center gap-1 opacity-80">
+            spin
+            <input
+              type="range"
+              min={-50}
+              max={10}
+              value={yaw}
+              onChange={(e) => setYaw(Number(e.target.value))}
+              className="w-16 accent-butter"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="crew-3d-stage relative h-[340px] w-full touch-none sm:h-[400px]">
+        <div className="crew-3d-world absolute left-1/2 top-[58%] origin-center" style={worldStyle}>
+          <div className="absolute rounded-3xl border-2 border-ink/40 bg-[#0b1220]" style={groundStyle} />
+
+          {ROOM_ORDER.map((id) => {
+            const box = ROOM_3D[id];
+            const meta = ROOMS[id];
+            const here = s.players.filter((p) => p.alive && p.room === id);
+            const body = s.bodies.some((b) => b.room === id);
+            const canWalk = self.alive && ROOMS[self.room].neighbors.includes(id);
+            const isHere = self.room === id;
+            const wallH = 48;
+            const roomStyle = {
+              width: box.w,
+              height: box.d,
+              transform: `translate(-50%, -50%) translate3d(${box.x}px, ${box.z}px, 0px)`,
+            };
+            const floorStyle = {
+              background: powerOut && !isHere ? "#1f2937" : box.floor,
+              boxShadow: isHere ? "0 0 0 4px #22c55e inset" : canWalk ? "0 0 0 3px #fbbf24 inset" : undefined,
+              transform: "translateZ(0px)",
+            };
+            const backWallStyle = {
+              height: wallH,
+              background: box.wall,
+              transformOrigin: "top" as const,
+              transform: "rotateX(-90deg)",
+              top: 0,
+              opacity: 0.92,
+            };
+            const leftWallStyle = {
+              width: wallH,
+              background: box.wall,
+              transformOrigin: "left" as const,
+              transform: "rotateY(90deg)",
+              left: 0,
+              opacity: 0.85,
+              filter: "brightness(0.85)",
+            };
+            const rightWallStyle = {
+              width: wallH,
+              background: box.wall,
+              transformOrigin: "right" as const,
+              transform: "rotateY(-90deg)",
+              right: 0,
+              opacity: 0.85,
+              filter: "brightness(0.75)",
+            };
+
+            return (
+              <div key={id} className="crew-3d-room absolute" style={roomStyle}>
+                <button
+                  type="button"
+                  disabled={disabled || (!canWalk && !isHere) || !self.alive || s.phase !== "play"}
+                  onClick={() => {
+                    if (!disabled && canWalk) onMove(id);
+                  }}
+                  className="crew-3d-face absolute inset-0 border-2 border-ink text-left disabled:cursor-default"
+                  style={floorStyle}
+                  aria-label={`${meta.label}${canWalk ? " — walk here" : ""}`}
+                >
+                  <span className="absolute left-2 top-2 rounded border border-ink bg-white/90 px-1.5 py-0.5 text-[10px] font-black text-ink">
+                    {meta.emoji} {meta.label}
+                  </span>
+                  {body ? <span className="absolute right-2 top-2 text-sm">💀</span> : null}
+                </button>
+
+                <div className="crew-3d-face absolute left-0 right-0 border-2 border-ink" style={backWallStyle} />
+                <div className="crew-3d-face absolute top-0 bottom-0 border-2 border-ink" style={leftWallStyle} />
+                <div className="crew-3d-face absolute top-0 bottom-0 border-2 border-ink" style={rightWallStyle} />
+
+                {here.map((p, i) => {
+                  const look = apparent(p, s.players, self.userId, now);
+                  const hideFace = powerOut && p.userId !== self.userId;
+                  const col = i % 3;
+                  const row = Math.floor(i / 3);
+                  const px = 28 + col * 36;
+                  const pz = 30 + row * 34;
+                  const pawnStyle = {
+                    left: px,
+                    top: pz,
+                    transform: `translateZ(18px) rotateX(${-tilt}deg) rotateZ(${-yaw}deg)`,
+                  };
+                  return (
+                    <div key={p.userId} className="crew-3d-pawn absolute" style={pawnStyle}>
+                      <Gumdrop
+                        color={hideFace ? "#475569" : look.color}
+                        size={p.userId === self.userId ? 40 : 32}
+                        label={look.name}
+                      />
+                      {p.userId === self.userId ? (
+                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded bg-lime px-1 text-[8px] font-black text-ink">
+                          YOU
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-2 border-t border-white/20 px-3 py-2">
         {ROOM_ORDER.filter((id) => ROOMS[self.room].neighbors.includes(id)).map((id) => (
           <button
@@ -876,7 +984,7 @@ function CrewBoard({ room, me, commit }: MatchContext) {
       )}
 
       <p className="text-center text-xs font-semibold text-ink/55">
-        Gumdrop crew on a flat floor plan. Roles: Closer, Tech (ducts), Glitch, Mimic (shapeshift).
+        Candy gumdrops in a real 3D arcade. Roles: Closer, Tech (ducts), Glitch, Mimic (shapeshift).
       </p>
     </div>
   );
@@ -1340,7 +1448,7 @@ export function CrewCheckGame({ onBack }: { onBack: () => void }) {
           <Gumdrop key={c} color={c} size={34} />
         ))}
       </div>
-      <p className="mb-5 text-sm font-semibold text-ink/70">Flat arcade floor plan. Gumdrop crew. Roles: Closer, Tech, Glitch, Mimic.</p>
+      <p className="mb-5 text-sm font-semibold text-ink/70">Real 3D arcade. Candy gumdrop crew. Roles: Closer, Tech, Glitch, Mimic.</p>
       <div className="space-y-3">
         <button
           type="button"

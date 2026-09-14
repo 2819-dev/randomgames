@@ -18,7 +18,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "crewcheck",
     title: "Crew Check",
-    blurb: "Gumdrop crew on a flat arcade map. Closer, Tech, Glitch, Mimic roles.",
+    blurb: "Candy gumdrops on a real 3D arcade map. Closer, Tech, Glitch, Mimic roles.",
     time: "~20 min",
     accent: "#ef4444",
     ink: "#fff",

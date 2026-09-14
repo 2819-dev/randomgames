@@ -234,3 +234,27 @@ body {
     animation: none;
   }
 }
+
+/* Crew Check 3D map */
+.crew-3d-stage {
+  perspective: 900px;
+  perspective-origin: 50% 35%;
+  overflow: hidden;
+}
+.crew-3d-world {
+  transform-style: preserve-3d;
+  width: 0;
+  height: 0;
+}
+.crew-3d-room {
+  transform-style: preserve-3d;
+}
+.crew-3d-face {
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+.crew-3d-pawn {
+  transform-style: preserve-3d;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.35));
+}
