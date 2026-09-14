@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { OnlineMatch, type MatchContext, type MatchPlayer } from "@/components/OnlineMatch";
 import { Confetti } from "@/components/Confetti";
 import { playBonk, playTap, playWin } from "@/lib/sfx";
@@ -588,24 +588,41 @@ function OnlinePulseBoard({ room, me, players, pushState, isHost }: MatchContext
   const s = room.state as unknown as PulseState;
   const [now, setNow] = useState(Date.now());
   const scores = s.scores || [0, 0];
+  const arming = useRef(false);
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 50);
+    const id = window.setInterval(() => setNow(Date.now()), 40);
     return () => window.clearInterval(id);
   }, []);
 
   // Host advances countdown → go signal
   const armRound = async () => {
-    if (!isHost || s.phase === "finished") return;
-    const delay = 1200 + Math.floor(Math.random() * 2000);
-    await pushState({
-      ...s,
-      phase: "countdown",
-      goAt: Date.now() + delay,
-      tapped: [null, null],
-      msg: "Wait for PULSE…",
-    });
+    if (!isHost || s.phase === "finished" || arming.current) return;
+    arming.current = true;
+    const delay = 1000 + Math.floor(Math.random() * 2200);
+    try {
+      await pushState({
+        ...s,
+        phase: "countdown",
+        goAt: Date.now() + delay,
+        tapped: [null, null],
+        msg: "Hold… wait for the flash",
+      });
+    } finally {
+      arming.current = false;
+    }
   };
+
+  // Auto-arm between rounds so matches keep flowing
+  useEffect(() => {
+    if (!isHost || room.status === "finished" || s.phase === "finished") return;
+    if (s.goAt != null) return;
+    const t = window.setTimeout(() => {
+      void armRound();
+    }, 900);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, room.status, s.goAt, s.round, s.phase]);
 
   const tap = async () => {
     if (s.phase === "finished") return;
@@ -704,9 +721,15 @@ function OnlinePulseBoard({ room, me, players, pushState, isHost }: MatchContext
 
   const goLive = s.goAt != null && now >= s.goAt;
   const waiting = s.goAt != null && now < s.goAt;
+  const myTap = s.tapped?.[me.seat];
+  const rivalTap = s.tapped?.[me.seat === 0 ? 1 : 0];
 
   return (
-    <div className="chunky-lg mx-auto max-w-md rounded-xl bg-paper p-5 text-center">
+    <div
+      className={`chunky-lg mx-auto max-w-md rounded-xl p-5 text-center transition-colors ${
+        goLive && myTap == null ? "bg-mint" : waiting ? "bg-ink text-white" : "bg-paper"
+      }`}
+    >
       <p className="mb-2 text-sm font-bold">
         {players.map((p, i) => `${p.profile.username} ${scores[i] ?? 0}`).join(" · ")} · round{" "}
         {s.round || 1}/{s.maxRounds || 5}
@@ -715,24 +738,35 @@ function OnlinePulseBoard({ room, me, players, pushState, isHost }: MatchContext
       {room.status !== "finished" && (
         <>
           {isHost && !s.goAt && (
-            <button
-              type="button"
-              className="btn-chunky mb-3 rounded-md bg-butter px-4 py-2 font-extrabold"
-              onClick={() => void armRound()}
-            >
-              Arm next pulse
-            </button>
+            <p className="mb-3 text-sm font-semibold opacity-70">Arming next pulse…</p>
           )}
           <button
             type="button"
-            disabled={!goLive || s.tapped?.[me.seat] != null}
+            disabled={myTap != null || (!goLive && !waiting && !s.goAt)}
             onClick={() => void tap()}
-            className={`btn-chunky mx-auto flex h-36 w-36 items-center justify-center rounded-full text-2xl font-extrabold text-white disabled:opacity-50 ${
-              goLive ? "bg-coral animate-bounce-soft" : waiting ? "bg-ink/40" : "bg-sky"
+            className={`btn-chunky mx-auto flex h-40 w-40 items-center justify-center rounded-full text-2xl font-extrabold disabled:opacity-50 ${
+              goLive && myTap == null
+                ? "animate-pulse-ring bg-coral text-white"
+                : waiting
+                  ? "bg-white/15 text-white"
+                  : "bg-sky text-white"
             }`}
           >
-            {goLive ? "PULSE!" : waiting ? "…" : "WAIT"}
+            {myTap != null
+              ? myTap < 0
+                ? "EARLY"
+                : `${myTap}ms`
+              : goLive
+                ? "TAP!"
+                : waiting
+                  ? "…"
+                  : "WAIT"}
           </button>
+          {rivalTap != null && (
+            <p className="mt-3 text-sm font-bold opacity-80">
+              Rival: {rivalTap < 0 ? "early foul" : `${rivalTap}ms`}
+            </p>
+          )}
         </>
       )}
     </div>
@@ -766,42 +800,89 @@ export function OnlinePulseDuel({ onBack }: { onBack: () => void }) {
   );
 }
 
-/* ─── NEW: Gridlock — hot potato cell claims simultaneous ─── */
+/* ─── Gridlock — timed hot-cell snatch duel ─── */
 
 type GridlockState = {
   phase: "playing" | "finished";
-  cells: (number | null)[]; // seat owner
+  cells: (number | null)[];
   scores: number[];
   open: number[];
+  expiresAt: number;
   round: number;
   maxRounds: number;
   msg: string;
   seats: { userId: string; seat: number; name: string }[];
 };
 
-function OnlineGridlockBoard({ room, me, players, pushState }: MatchContext) {
+function shuffleOpen(count: number) {
+  return [0, 1, 2, 3, 4, 5, 6, 7, 8].sort(() => Math.random() - 0.5).slice(0, count);
+}
+
+function OnlineGridlockBoard({ room, me, players, pushState, isHost }: MatchContext) {
   const s = room.state as unknown as GridlockState;
   const cells = s.cells || Array(9).fill(null);
   const open = new Set(s.open || []);
   const scores = s.scores || [0, 0];
+  const [now, setNow] = useState(Date.now());
+  const flipping = useRef(false);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 80);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const leftMs = Math.max(0, (s.expiresAt || 0) - now);
+
+  // When the timer burns out, host refreshes open cells (or ends round)
+  useEffect(() => {
+    if (!isHost || room.status !== "playing" || s.phase === "finished") return;
+    if (!s.expiresAt || now < s.expiresAt) return;
+    if (flipping.current) return;
+    flipping.current = true;
+    const claimed = cells.filter((c) => c != null).length;
+    const nextRound = claimed > 0 || (s.open || []).length === 0 ? (s.round || 1) + 1 : s.round || 1;
+    const maxRounds = s.maxRounds || 4;
+    const finished = nextRound > maxRounds;
+    const openCount = Math.min(6, 3 + nextRound);
+    void pushState(
+      {
+        ...s,
+        cells: finished ? cells : Array(9).fill(null),
+        open: finished ? [] : shuffleOpen(openCount),
+        expiresAt: finished ? 0 : Date.now() + Math.max(3200, 5200 - nextRound * 350),
+        round: finished ? s.round : nextRound,
+        phase: finished ? "finished" : "playing",
+        msg: finished
+          ? scores[0]! === scores[1]!
+            ? "Gridlock draw!"
+            : scores[0]! > scores[1]!
+              ? `${s.seats[0]?.name} locks the grid!`
+              : `${s.seats[1]?.name} locks the grid!`
+          : `Round ${nextRound} — new hot cells!`,
+      },
+      finished ? "finished" : "playing",
+    ).finally(() => {
+      flipping.current = false;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now, s.expiresAt, isHost, room.status]);
 
   const grab = async (i: number) => {
     if (room.status === "finished") return;
     if (!open.has(i) || cells[i] != null) return;
+    if (s.expiresAt && Date.now() > s.expiresAt) return;
     const nextCells = [...cells];
     nextCells[i] = me.seat;
     playTap();
     const remaining = (s.open || []).filter((x) => x !== i && nextCells[x] == null);
     const nextScores = [...scores];
-    nextScores[me.seat]!++;
+    nextScores[me.seat]! += 1 + (leftMs < 1200 ? 1 : 0);
 
     if (remaining.length === 0) {
       const round = (s.round || 1) + 1;
-      const maxRounds = s.maxRounds || 3;
+      const maxRounds = s.maxRounds || 4;
       const finished = round > maxRounds;
-      // new open set for next round or finish
-      const all = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-      const shuffled = [...all].sort(() => Math.random() - 0.5).slice(0, 5);
+      const openCount = Math.min(6, 3 + round);
       if (finished) {
         if (
           (nextScores[0]! > nextScores[1]! && me.seat === 0) ||
@@ -814,7 +895,8 @@ function OnlineGridlockBoard({ room, me, players, pushState }: MatchContext) {
         {
           ...s,
           cells: finished ? nextCells : Array(9).fill(null),
-          open: finished ? [] : shuffled,
+          open: finished ? [] : shuffleOpen(openCount),
+          expiresAt: finished ? 0 : Date.now() + Math.max(3200, 5200 - round * 350),
           scores: nextScores,
           round: finished ? s.round : round,
           phase: finished ? "finished" : "playing",
@@ -824,7 +906,7 @@ function OnlineGridlockBoard({ room, me, players, pushState }: MatchContext) {
               : nextScores[0]! > nextScores[1]!
                 ? `${s.seats[0]?.name} locks the grid!`
                 : `${s.seats[1]?.name} locks the grid!`
-            : `Round ${round} — snatch open cells`,
+            : `Round ${round} — snatch before they fade`,
         },
         finished ? "finished" : "playing",
       );
@@ -834,7 +916,10 @@ function OnlineGridlockBoard({ room, me, players, pushState }: MatchContext) {
         cells: nextCells,
         open: remaining,
         scores: nextScores,
-        msg: `${me.profile.username} grabbed a cell`,
+        msg:
+          leftMs < 1200
+            ? `${me.profile.username} clutch grab (+2)`
+            : `${me.profile.username} snatched a cell`,
       });
     }
   };
@@ -843,12 +928,18 @@ function OnlineGridlockBoard({ room, me, players, pushState }: MatchContext) {
     <div className="chunky-lg mx-auto max-w-sm rounded-xl bg-paper p-5">
       <p className="mb-2 text-center text-sm font-bold">
         {players.map((p, i) => `${p.profile.username} ${scores[i] ?? 0}`).join(" · ")} · round{" "}
-        {s.round || 1}/{s.maxRounds || 3}
+        {s.round || 1}/{s.maxRounds || 4}
       </p>
+      <div className="mb-3 h-2 overflow-hidden rounded-full bg-ink/10">
+        <div
+          className="h-full bg-lime transition-all"
+          style={{ width: `${Math.min(100, (leftMs / 5200) * 100)}%` }}
+        />
+      </div>
       <p className="mb-3 text-center font-extrabold">{s.msg}</p>
       <div className="grid grid-cols-3 gap-2">
         {cells.map((owner, i) => {
-          const isOpen = open.has(i) && owner == null && room.status === "playing";
+          const isOpen = open.has(i) && owner == null && room.status === "playing" && leftMs > 0;
           return (
             <button
               key={i}
@@ -856,10 +947,18 @@ function OnlineGridlockBoard({ room, me, players, pushState }: MatchContext) {
               disabled={!isOpen}
               onClick={() => void grab(i)}
               className={`btn-chunky aspect-square rounded-md text-lg font-extrabold disabled:opacity-60 ${
-                isOpen ? "bg-lime" : owner === 0 ? "bg-sky text-white" : owner === 1 ? "bg-coral text-white" : "bg-white"
+                isOpen
+                  ? leftMs < 1200
+                    ? "animate-bounce-soft bg-butter"
+                    : "animate-pulse-ring bg-lime"
+                  : owner === 0
+                    ? "bg-sky text-white"
+                    : owner === 1
+                      ? "bg-coral text-white"
+                      : "bg-white"
               }`}
             >
-              {owner == null ? (isOpen ? "!" : "") : owner === me.seat ? "YOU" : "RIV"}
+              {owner == null ? (isOpen ? "GRAB" : "") : owner === me.seat ? "YOU" : "RIV"}
             </button>
           );
         })}
@@ -877,15 +976,16 @@ export function OnlineGridlock({ onBack }: { onBack: () => void }) {
       minPlayers={2}
       onBack={onBack}
       buildInitialState={(players) => {
-        const open = [0, 1, 2, 3, 4, 5, 6, 7, 8].sort(() => Math.random() - 0.5).slice(0, 5);
+        const open = shuffleOpen(4);
         return {
           phase: "playing",
           cells: Array(9).fill(null),
           scores: [0, 0],
           open,
+          expiresAt: Date.now() + 5000,
           round: 1,
-          maxRounds: 3,
-          msg: "Snatch glowing cells before your rival",
+          maxRounds: 4,
+          msg: "Hot cells fade fast — snatch them!",
           seats: players.map((p) => ({
             userId: p.user_id,
             seat: p.seat,

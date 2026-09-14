@@ -41,7 +41,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "pulseduel",
     title: "Pulse Duel",
-    blurb: "Wait for the flash. Tap first. Don't jump the gun.",
+    blurb: "Auto-armed pulses. First clean tap wins the round. Early = foul.",
     time: "~3 min",
     accent: "#ef4444",
     ink: "#fff",
@@ -51,7 +51,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "gridlock",
     title: "Gridlock",
-    blurb: "Grab the glowing tiles before your friend cleans the board.",
+    blurb: "Hot cells fade on a timer. Clutch grabs score double.",
     time: "~2 min",
     accent: "#22c55e",
     sticker: "🔲",
@@ -155,7 +155,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "snake",
     title: "Snek",
-    blurb: "Eat, grow, don't crash. Simple. Addictive.",
+    blurb: "Chain bites for combos. Gold snacks, wrap walls, speed climb.",
     time: "~2 min",
     accent: "var(--lime)",
     sticker: "🐍",
@@ -164,7 +164,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "flappy",
     title: "Flap",
-    blurb: "Find the rhythm, clear the pipes, beat your best.",
+    blurb: "Flap through tighter gaps. Graze pipes for near-miss bonus points.",
     time: "~2 min",
     accent: "#7dd3fc",
     sticker: "🐤",
@@ -182,7 +182,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "memory",
     title: "Matchup",
-    blurb: "Flip pairs fast. Fewer moves, bigger win.",
+    blurb: "Chain matches for combo points. Clear the board with style.",
     time: "~3 min",
     accent: "var(--sky)",
     ink: "#fff",
@@ -192,7 +192,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "reaction",
     title: "Zap",
-    blurb: "When it flashes, tap. How sharp is your timing?",
+    blurb: "Five-round zap challenge. Chase a sub-220 average.",
     time: "~1 min",
     accent: "var(--butter)",
     sticker: "⚡",
@@ -211,7 +211,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "echo",
     title: "Echo",
-    blurb: "Watch the pattern. Repeat it. Don't lose the beat.",
+    blurb: "Simon with lives and rising speed. Don't drop the beat.",
     time: "~2 min",
     accent: "var(--mint)",
     sticker: "🎵",
@@ -248,7 +248,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "catch",
     title: "Catch!",
-    blurb: "Snacks falling fast. Tap them before they're gone.",
+    blurb: "Paddle catch — snacks, gold, bombs, slow-mo, fever combos.",
     time: "~1 min",
     accent: "#f43f5e",
     ink: "#fff",

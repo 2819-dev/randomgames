@@ -1,9 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { GameShell } from "@/components/GameShell";
 import { Confetti } from "@/components/Confetti";
-import { beep, playBonk, playWin } from "@/lib/sfx";
+import { GameShell } from "@/components/GameShell";
+import { beep, playBonk, playTap, playWin } from "@/lib/sfx";
 import { randInt } from "@/lib/random";
 
 const COLORS = [
@@ -20,36 +20,42 @@ export function EchoGame({ onBack }: { onBack: () => void }) {
   const [playing, setPlaying] = useState(false);
   const [listening, setListening] = useState(false);
   const [score, setScore] = useState(0);
+  const [lives, setLives] = useState(3);
   const [lost, setLost] = useState(false);
+  const [toast, setToast] = useState("Watch the pattern. Repeat it.");
   const lock = useRef(false);
+  const speedRef = useRef(300);
 
   const flash = async (index: number) => {
     setLit(index);
-    beep(COLORS[index].freq, 0.18, "square", 0.05);
-    await new Promise((r) => setTimeout(r, 320));
+    beep(COLORS[index]!.freq, 0.16, "square", 0.05);
+    await new Promise((r) => setTimeout(r, speedRef.current));
     setLit(null);
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, Math.max(60, speedRef.current * 0.35)));
   };
 
   const playSequence = async (next: number[]) => {
     setPlaying(true);
     setListening(false);
     lock.current = true;
-    await new Promise((r) => setTimeout(r, 400));
-    for (const i of next) {
-      await flash(i);
-    }
+    await new Promise((r) => setTimeout(r, 380));
+    for (const i of next) await flash(i);
     setPlaying(false);
     setListening(true);
     lock.current = false;
+    setToast("Your turn");
   };
 
   const start = () => {
+    speedRef.current = 300;
     const first = [randInt(4)];
     setSeq(first);
     setStep(0);
     setScore(0);
+    setLives(3);
     setLost(false);
+    setToast("Memorize…");
+    playTap();
     void playSequence(first);
   };
 
@@ -58,14 +64,30 @@ export function EchoGame({ onBack }: { onBack: () => void }) {
     void flash(i);
     if (i !== seq[step]) {
       playBonk();
-      setLost(true);
-      setListening(false);
+      const nextLives = lives - 1;
+      setLives(nextLives);
+      if (nextLives <= 0) {
+        setLost(true);
+        setListening(false);
+        setToast(`Lost the beat at ${score}`);
+        return;
+      }
+      setToast(`Miss — ${nextLives} left. Watch again.`);
+      setStep(0);
+      void playSequence(seq);
       return;
     }
     if (step + 1 === seq.length) {
       const nextScore = score + 1;
       setScore(nextScore);
-      if (nextScore % 3 === 0) playWin();
+      speedRef.current = Math.max(140, 300 - nextScore * 12);
+      if (nextScore % 3 === 0) {
+        playWin();
+        setToast(`Level ${nextScore} — speeding up`);
+      } else {
+        beep(700, 0.07, "triangle", 0.05);
+        setToast(`Nice · ${nextScore}`);
+      }
       const next = [...seq, randInt(4)];
       setSeq(next);
       setStep(0);
@@ -80,44 +102,40 @@ export function EchoGame({ onBack }: { onBack: () => void }) {
       title="Echo"
       accent="var(--mint)"
       onBack={onBack}
-      stats={<span>Round {score}</span>}
+      stats={
+        <span>
+          {score} · ❤{lives}
+        </span>
+      }
     >
-      <div className="relative">
-        <Confetti show={score > 0 && score % 5 === 0 && !lost && !playing} />
-        <div className="mx-auto grid max-w-sm grid-cols-2 gap-3">
+      <div className="relative mx-auto max-w-sm">
+        <Confetti show={score > 0 && score % 5 === 0 && !lost && listening} />
+        <p className="mb-3 text-center text-sm font-bold text-ink/70">{toast}</p>
+        <div className="grid grid-cols-2 gap-3">
           {COLORS.map((c, i) => (
             <button
               key={i}
               type="button"
+              disabled={playing || lost || (!listening && seq.length > 0)}
               onClick={() => press(i)}
-              disabled={!listening}
-              className="aspect-square rounded-2xl border-[3px] border-ink transition-transform active:scale-95 disabled:cursor-default"
+              className="btn-chunky aspect-square rounded-xl transition-transform active:scale-95 disabled:opacity-80"
               style={{
                 background: lit === i ? c.lit : c.idle,
-                boxShadow: lit === i ? "1px 1px 0 var(--ink)" : "4px 4px 0 var(--ink)",
-                transform: lit === i ? "translate(2px,2px)" : undefined,
+                transform: lit === i ? "scale(1.04)" : undefined,
+                boxShadow: lit === i ? "0 0 0 4px rgba(255,255,255,0.35)" : undefined,
               }}
               aria-label={`Pad ${i + 1}`}
             />
           ))}
         </div>
-        <div className="mt-6 text-center">
-          {lost ? (
-            <>
-              <p className="mb-3 animate-wiggle font-bold">Brain buffer overflow at round {score}.</p>
-              <button type="button" onClick={start} className="btn-chunky rounded-md bg-mint px-5 py-2">
-                Again!
-              </button>
-            </>
-          ) : !seq.length ? (
+
+        <div className="mt-5 text-center">
+          {(lost || seq.length === 0) && (
             <button type="button" onClick={start} className="btn-chunky rounded-md bg-mint px-5 py-2">
-              Start the jam
+              {lost ? "Try again" : "Start"}
             </button>
-          ) : (
-            <p className="font-bold">
-              {playing ? "Watch…" : listening ? "Your turn — copy that!" : "Ready"}
-            </p>
           )}
+          {playing && <p className="text-sm font-semibold">Listen…</p>}
         </div>
       </div>
     </GameShell>
