@@ -7,23 +7,30 @@ import type { Room } from "@/lib/supabase";
 import { beep, playBonk, playTap, playWin } from "@/lib/sfx";
 import { shuffle } from "@/lib/random";
 
-/** Live multiplayer night-shift mystery at Box Arcade. Among Us DNA — own world. */
+/** Flat 2D arcade map + gumdrop crew. Among Us DNA — own identity. */
 
 type RoomId = "lobby" | "prizes" | "tickets" | "floor" | "break" | "dock";
 type Phase = "play" | "meeting" | "vote" | "done";
 type TaskKind = "wires" | "tap" | "hold";
+type Team = "staff" | "glitch";
+type RoleId = "closer" | "tech" | "glitch" | "mimic";
 type Sabotage = null | { kind: "power" | "alarm"; endsAt: number };
 
 type CrewPlayer = {
   userId: string;
   name: string;
   color: string;
-  glitch: boolean;
+  team: Team;
+  role: RoleId;
   alive: boolean;
   room: RoomId;
   tasksDone: number;
   killReadyAt: number;
+  ventReadyAt: number;
+  mimicReadyAt: number;
   lastActionAt: number;
+  disguiseAs: string | null;
+  disguiseUntil: number;
 };
 
 type Body = { victimId: string; room: RoomId; name: string };
@@ -42,9 +49,19 @@ type CrewState = {
 };
 
 const COLORS = ["#ef4444", "#3b82f6", "#22c55e", "#eab308", "#a855f7", "#f97316", "#ec4899", "#14b8a6"];
-const ACTION_MS = 850;
+const ACTION_MS = 750;
 const KILL_MS = 18_000;
+const VENT_MS = 6_000;
 const SABOTAGE_MS = 45_000;
+const MIMIC_MS = 12_000;
+const MIMIC_CD_MS = 28_000;
+
+const ROLE_META: Record<RoleId, { label: string; team: Team; blurb: string }> = {
+  closer: { label: "Closer", team: "staff", blurb: "Finish closing jobs before the shift collapses." },
+  tech: { label: "Tech", team: "staff", blurb: "Engineer-style — ride service ducts between rooms." },
+  glitch: { label: "Glitch", team: "glitch", blurb: "Delete staff and sabotage the arcade." },
+  mimic: { label: "Mimic", team: "glitch", blurb: "Shapeshifter — briefly look like another gumdrop." },
+};
 
 const ROOMS: Record<RoomId, { label: string; emoji: string; neighbors: RoomId[]; task: string; kind: TaskKind }> = {
   lobby: { label: "Lobby", emoji: "🎟️", neighbors: ["prizes", "tickets", "break"], task: "Wipe front glass", kind: "tap" },
@@ -55,48 +72,115 @@ const ROOMS: Record<RoomId, { label: string; emoji: string; neighbors: RoomId[];
   dock: { label: "Loading Dock", emoji: "📦", neighbors: ["tickets", "floor"], task: "Sign delivery", kind: "hold" },
 };
 
+const DUCTS: Partial<Record<RoomId, RoomId[]>> = {
+  tickets: ["floor", "dock"],
+  floor: ["tickets", "dock"],
+  dock: ["tickets", "floor"],
+};
+
 const ROOM_ORDER: RoomId[] = ["lobby", "prizes", "tickets", "floor", "break", "dock"];
+
+const MAP_POS: Record<RoomId, { x: number; y: number; w: number; h: number }> = {
+  lobby: { x: 4, y: 4, w: 28, h: 28 },
+  prizes: { x: 36, y: 4, w: 28, h: 22 },
+  tickets: { x: 68, y: 4, w: 28, h: 28 },
+  break: { x: 4, y: 38, w: 24, h: 26 },
+  floor: { x: 34, y: 32, w: 32, h: 36 },
+  dock: { x: 70, y: 40, w: 26, h: 28 },
+};
+
+const BOT_NAMES = ["Rivet", "Token", "Plush", "Cabinet", "Till", "Dockbot", "Neon", "Joystick"];
+const HUMAN_ID = "local-you";
 
 function parse(raw: Record<string, unknown>): CrewState {
   return raw as unknown as CrewState;
 }
 
+function isGlitch(p: CrewPlayer) {
+  return p.team === "glitch";
+}
+
+function canVent(p: CrewPlayer) {
+  return p.role === "tech" || p.team === "glitch";
+}
+
 function staffTasks(players: CrewPlayer[]) {
-  return players.filter((p) => !p.glitch).reduce((n, p) => n + p.tasksDone, 0);
+  return players.filter((p) => !isGlitch(p)).reduce((n, p) => n + p.tasksDone, 0);
+}
+
+function clearExpiredDisguises(s: CrewState, now = Date.now()): CrewState {
+  let changed = false;
+  const players = s.players.map((p) => {
+    if (p.disguiseAs && p.disguiseUntil <= now) {
+      changed = true;
+      return { ...p, disguiseAs: null, disguiseUntil: 0 };
+    }
+    return p;
+  });
+  return changed ? { ...s, players } : s;
 }
 
 function withWins(s: CrewState): CrewState {
-  const glitch = s.players.filter((p) => p.alive && p.glitch).length;
-  const staff = s.players.filter((p) => p.alive && !p.glitch).length;
-  if (glitch === 0) return { ...s, phase: "done", winner: "staff", log: "All glitches ejected. Staff closes the arcade." };
-  if (glitch >= staff) return { ...s, phase: "done", winner: "glitch", log: "Glitches outnumber staff. Night shift collapses." };
-  if (staffTasks(s.players) >= s.tasksNeeded) return { ...s, phase: "done", winner: "staff", log: "Closing checklist done. Staff wins!" };
-  if (s.sabotage && s.sabotage.endsAt <= Date.now()) {
+  const cur = clearExpiredDisguises(s);
+  const glitch = cur.players.filter((p) => p.alive && isGlitch(p)).length;
+  const staff = cur.players.filter((p) => p.alive && !isGlitch(p)).length;
+  if (glitch === 0) return { ...cur, phase: "done", winner: "staff", log: "All glitches ejected. Staff closes the arcade." };
+  if (glitch >= staff) return { ...cur, phase: "done", winner: "glitch", log: "Glitches outnumber staff. Night shift collapses." };
+  if (staffTasks(cur.players) >= cur.tasksNeeded) return { ...cur, phase: "done", winner: "staff", log: "Closing checklist done. Staff wins!" };
+  if (cur.sabotage && cur.sabotage.endsAt <= Date.now()) {
     return {
-      ...s,
+      ...cur,
       phase: "done",
       winner: "glitch",
-      log: s.sabotage.kind === "alarm" ? "Alarm locked everyone in. Glitches win." : "Power died for good. Glitches win.",
+      log: cur.sabotage.kind === "alarm" ? "Alarm locked everyone in. Glitches win." : "Power died for good. Glitches win.",
     };
   }
-  return s;
+  return cur;
+}
+
+function assignRoles(n: number, glitchCount: number): RoleId[] {
+  const roles: RoleId[] = Array.from({ length: n }, () => "closer" as RoleId);
+  const idxs = shuffle([...Array(n).keys()]);
+  const glitchIdxs = idxs.slice(0, glitchCount);
+  const staffIdxs = idxs.slice(glitchCount);
+
+  if (glitchCount >= 2) {
+    roles[glitchIdxs[0]!] = "glitch";
+    roles[glitchIdxs[1]!] = "mimic";
+    for (let i = 2; i < glitchIdxs.length; i++) roles[glitchIdxs[i]!] = "glitch";
+  } else {
+    roles[glitchIdxs[0]!] = Math.random() < 0.45 ? "mimic" : "glitch";
+  }
+
+  if (staffIdxs.length >= 2) roles[staffIdxs[0]!] = "tech";
+  else if (staffIdxs[0] !== undefined && Math.random() < 0.5) roles[staffIdxs[0]] = "tech";
+
+  return roles;
 }
 
 function buildInitialState(players: MatchPlayer[]): Record<string, unknown> {
   const n = players.length;
   const glitchCount = n >= 7 ? 2 : 1;
-  const picks = new Set(shuffle([...Array(n).keys()]).slice(0, glitchCount));
-  const crew: CrewPlayer[] = players.map((p, i) => ({
-    userId: p.user_id,
-    name: p.profile.display_name || p.profile.username,
-    color: COLORS[i % COLORS.length]!,
-    glitch: picks.has(i),
-    alive: true,
-    room: "lobby" as RoomId,
-    tasksDone: 0,
-    killReadyAt: Date.now() + 8_000,
-    lastActionAt: 0,
-  }));
+  const roles = assignRoles(n, glitchCount);
+  const crew: CrewPlayer[] = players.map((p, i) => {
+    const role = roles[i]!;
+    return {
+      userId: p.user_id,
+      name: p.profile.display_name || p.profile.username,
+      color: COLORS[i % COLORS.length]!,
+      team: ROLE_META[role].team,
+      role,
+      alive: true,
+      room: "lobby" as RoomId,
+      tasksDone: 0,
+      killReadyAt: Date.now() + 8_000,
+      ventReadyAt: 0,
+      mimicReadyAt: 0,
+      lastActionAt: 0,
+      disguiseAs: null,
+      disguiseUntil: 0,
+    };
+  });
   const state: CrewState = {
     phase: "play",
     players: crew,
@@ -106,14 +190,180 @@ function buildInitialState(players: MatchPlayer[]): Record<string, unknown> {
     emergencyLeft: 1,
     meetingCaller: null,
     votes: {},
-    log: "Night shift starts. Finish closing jobs — or get deleted.",
+    log: "Night shift starts. Finish closing — watch for Mimics in the ducts.",
     winner: null,
   };
   return state as unknown as Record<string, unknown>;
 }
 
+function apparent(p: CrewPlayer, all: CrewPlayer[], viewerId: string, now: number) {
+  if (p.userId !== viewerId && p.disguiseAs && p.disguiseUntil > now) {
+    const target = all.find((x) => x.userId === p.disguiseAs);
+    if (target) return { color: target.color, name: target.name };
+  }
+  return { color: p.color, name: p.name };
+}
+
+function Gumdrop({
+  color,
+  size = 36,
+  dead = false,
+  ghost = false,
+  label,
+}: {
+  color: string;
+  size?: number;
+  dead?: boolean;
+  ghost?: boolean;
+  label?: string;
+}) {
+  const h = size;
+  const w = Math.round(size * 0.82);
+  return (
+    <span className="inline-flex flex-col items-center" style={{ opacity: ghost ? 0.45 : 1 }} title={label}>
+      <svg width={w} height={h} viewBox="0 0 44 54" aria-hidden>
+        <ellipse cx="8" cy="28" rx="7" ry="11" fill={color} stroke="#111" strokeWidth="2.2" opacity={dead ? 0.5 : 1} />
+        <ellipse cx="24" cy="26" rx="16" ry="20" fill={dead ? "#9ca3af" : color} stroke="#111" strokeWidth="2.4" />
+        <ellipse cx="28" cy="24" rx="10" ry="9" fill={dead ? "#cbd5e1" : "#dff6ff"} stroke="#111" strokeWidth="2" />
+        <ellipse cx="30" cy="22" rx="3.5" ry="3" fill="white" opacity="0.85" />
+        {!dead && (
+          <>
+            <rect x="14" y="42" width="8" height="9" rx="3" fill={color} stroke="#111" strokeWidth="2" />
+            <rect x="26" y="42" width="8" height="9" rx="3" fill={color} stroke="#111" strokeWidth="2" />
+          </>
+        )}
+        {dead && <path d="M16 20 L32 32 M32 20 L16 32" stroke="#111" strokeWidth="2.5" strokeLinecap="round" />}
+      </svg>
+    </span>
+  );
+}
+
+function ArcadeMap({
+  s,
+  self,
+  now,
+  powerOut,
+  onMove,
+  disabled,
+}: {
+  s: CrewState;
+  self: CrewPlayer;
+  now: number;
+  powerOut: boolean;
+  onMove: (id: RoomId) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border-[3px] border-ink bg-[#1a2744]">
+      <div className="flex items-center justify-between px-3 py-2 text-white">
+        <p className="text-xs font-black tracking-wide">BOX ARCADE · FLOOR PLAN</p>
+        <p className="text-[10px] font-bold opacity-70">2D schematic</p>
+      </div>
+      <svg viewBox="0 0 100 78" className="h-auto w-full" role="img" aria-label="Arcade floor plan">
+        <rect x="28" y="14" width="12" height="6" fill="#2a3d66" />
+        <rect x="60" y="14" width="12" height="6" fill="#2a3d66" />
+        <rect x="16" y="30" width="6" height="10" fill="#2a3d66" />
+        <rect x="46" y="24" width="6" height="10" fill="#2a3d66" />
+        <rect x="62" y="48" width="10" height="6" fill="#2a3d66" />
+        <rect x="48" y="58" width="24" height="5" fill="#2a3d66" />
+        <path d="M78 30 L78 42 L82 42" fill="none" stroke="#fbbf24" strokeWidth="0.8" strokeDasharray="1.5 1.2" opacity="0.7" />
+        <path d="M50 55 L72 55 L72 48" fill="none" stroke="#fbbf24" strokeWidth="0.8" strokeDasharray="1.5 1.2" opacity="0.7" />
+
+        {ROOM_ORDER.map((id) => {
+          const pos = MAP_POS[id];
+          const meta = ROOMS[id];
+          const here = s.players.filter((p) => p.alive && p.room === id);
+          const body = s.bodies.some((b) => b.room === id);
+          const canWalk = self.alive && ROOMS[self.room].neighbors.includes(id);
+          const isHere = self.room === id;
+          return (
+            <g key={id}>
+              <rect
+                x={pos.x}
+                y={pos.y}
+                width={pos.w}
+                height={pos.h}
+                rx={2.5}
+                fill={isHere ? "#fde68a" : canWalk ? "#e2e8f0" : "#94a3b8"}
+                stroke="#0f172a"
+                strokeWidth={isHere ? 1.4 : 1}
+                className={!disabled && canWalk ? "cursor-pointer" : undefined}
+                onClick={() => {
+                  if (!disabled && canWalk) onMove(id);
+                }}
+              />
+              <text x={pos.x + 1.5} y={pos.y + 4.5} fontSize="3.2" fontWeight="800" fill="#111">
+                {meta.emoji} {meta.label}
+              </text>
+              {body && (
+                <text x={pos.x + pos.w - 5} y={pos.y + 5} fontSize="4">
+                  💀
+                </text>
+              )}
+              {here.map((p, i) => {
+                const look = apparent(p, s.players, self.userId, now);
+                const hideFace = powerOut && p.userId !== self.userId;
+                const cx = pos.x + 5 + (i % 4) * 6.5;
+                const cy = pos.y + 10 + Math.floor(i / 4) * 9;
+                return (
+                  <g key={p.userId} transform={`translate(${cx}, ${cy})`}>
+                    <ellipse cx="2.2" cy="3.2" rx="2.4" ry="3.1" fill={hideFace ? "#334155" : look.color} stroke="#111" strokeWidth="0.45" />
+                    <ellipse cx="2.8" cy="2.9" rx="1.3" ry="1.15" fill={hideFace ? "#64748b" : "#e0f2fe"} stroke="#111" strokeWidth="0.35" />
+                    {p.userId === self.userId && <circle cx="2.2" cy="-1.2" r="0.7" fill="#22c55e" stroke="#111" strokeWidth="0.3" />}
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="flex flex-wrap gap-2 border-t border-white/20 px-3 py-2">
+        {ROOM_ORDER.filter((id) => ROOMS[self.room].neighbors.includes(id)).map((id) => (
+          <button
+            key={id}
+            type="button"
+            disabled={disabled || !self.alive || s.phase !== "play"}
+            className="rounded-md border-2 border-ink bg-butter px-2 py-1 text-[11px] font-black text-ink disabled:opacity-40"
+            onClick={() => onMove(id)}
+          >
+            Walk → {ROOMS[id].label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function resolveVotes(cur: CrewState): CrewState {
+  const tallies = new Map<string, number>();
+  for (const t of Object.values(cur.votes)) tallies.set(t, (tallies.get(t) ?? 0) + 1);
+  let best = "skip";
+  let bestN = -1;
+  let tie = false;
+  for (const [id, n] of tallies) {
+    if (n > bestN) {
+      best = id;
+      bestN = n;
+      tie = false;
+    } else if (n === bestN) tie = true;
+  }
+  if (tie || best === "skip") {
+    return { ...cur, phase: "play", meetingCaller: null, votes: {}, log: "No consensus — back to closing." };
+  }
+  const ejected = cur.players.find((p) => p.userId === best);
+  if (!ejected) return { ...cur, phase: "play", meetingCaller: null, votes: {}, log: "Vote fizzled." };
+  return {
+    ...cur,
+    phase: "play",
+    players: cur.players.map((p) => (p.userId === best ? { ...p, alive: false, disguiseAs: null } : p)),
+    meetingCaller: null,
+    votes: {},
+    log: `${ejected.name} ejected — ${ROLE_META[ejected.role].label}${isGlitch(ejected) ? " (glitch team)" : " (staff)"}.`,
+  };
+}
+
 function CrewBoard({ room, me, commit }: MatchContext) {
-  const s = parse(room.state);
+  const s = withWins(parse(room.state));
   const self = s.players.find((p) => p.userId === me.user_id) ?? null;
   const [busy, setBusy] = useState(false);
   const [localTask, setLocalTask] = useState(false);
@@ -167,7 +417,17 @@ function CrewBoard({ room, me, commit }: MatchContext) {
   const powerOut = s.sabotage?.kind === "power";
   const done = staffTasks(s.players);
   const killCd = Math.max(0, Math.ceil((self.killReadyAt - now) / 1000));
+  const ventCd = Math.max(0, Math.ceil((self.ventReadyAt - now) / 1000));
   const sabLeft = s.sabotage ? Math.max(0, Math.ceil((s.sabotage.endsAt - now) / 1000)) : 0;
+  const mimicActive = !!(self.disguiseAs && self.disguiseUntil > now);
+  const mimicCd = (() => {
+    if (self.role !== "mimic") return 0;
+    if (mimicActive) return Math.ceil((self.disguiseUntil - now) / 1000);
+    return Math.max(0, Math.ceil((self.mimicReadyAt - now) / 1000));
+  })();
+  const ductExits = DUCTS[self.room] ?? [];
+  const victimsHere = s.players.filter((p) => p.alive && !isGlitch(p) && p.room === self.room && p.userId !== self.userId);
+  const roleMeta = ROLE_META[self.role];
 
   const moveTo = (id: RoomId) => {
     if (!self.alive || s.phase !== "play" || localTask) return;
@@ -185,8 +445,26 @@ function CrewBoard({ room, me, commit }: MatchContext) {
     playTap();
   };
 
+  const ventTo = (id: RoomId) => {
+    if (!self.alive || s.phase !== "play" || localTask || !canVent(self)) return;
+    void run((cur) => {
+      const p = cur.players.find((x) => x.userId === self.userId);
+      if (!p?.alive || cur.phase !== "play" || !canVent(p)) return null;
+      if (Date.now() < p.ventReadyAt) return null;
+      if (!(DUCTS[p.room] ?? []).includes(id)) return null;
+      return {
+        ...cur,
+        players: cur.players.map((x) =>
+          x.userId === p.userId ? { ...x, room: id, lastActionAt: Date.now(), ventReadyAt: Date.now() + VENT_MS } : x,
+        ),
+        log: `${p.name} slipped through a service duct…`,
+      };
+    });
+    playTap();
+  };
+
   const startTask = () => {
-    if (!self.alive || self.glitch || s.phase !== "play") return;
+    if (!self.alive || isGlitch(self) || s.phase !== "play") return;
     if (powerOut && self.room !== "tickets" && self.room !== "floor") {
       playBonk();
       return;
@@ -202,7 +480,7 @@ function CrewBoard({ room, me, commit }: MatchContext) {
     setLocalTask(false);
     void run((cur) => {
       const p = cur.players.find((x) => x.userId === self.userId);
-      if (!p?.alive || p.glitch || cur.phase !== "play") return null;
+      if (!p?.alive || isGlitch(p) || cur.phase !== "play") return null;
       let sab = cur.sabotage;
       let log = `${p.name} finished ${ROOMS[p.room].task}.`;
       if (sab?.kind === "power" && (p.room === "tickets" || p.room === "floor")) {
@@ -226,10 +504,10 @@ function CrewBoard({ room, me, commit }: MatchContext) {
   };
 
   const fakeTask = () => {
-    if (!self.glitch || s.phase !== "play") return;
+    if (!isGlitch(self) || s.phase !== "play") return;
     void run((cur) => {
       const p = cur.players.find((x) => x.userId === self.userId);
-      if (!p?.alive || !p.glitch) return null;
+      if (!p?.alive || !isGlitch(p)) return null;
       return {
         ...cur,
         players: cur.players.map((x) => (x.userId === p.userId ? { ...x, lastActionAt: Date.now() } : x)),
@@ -240,20 +518,20 @@ function CrewBoard({ room, me, commit }: MatchContext) {
   };
 
   const doKill = (victimId: string) => {
-    if (!self.glitch || s.phase !== "play") return;
+    if (!isGlitch(self) || s.phase !== "play") return;
     void run((cur) => {
       const p = cur.players.find((x) => x.userId === self.userId);
       const v = cur.players.find((x) => x.userId === victimId);
-      if (!p?.glitch || !p.alive || !v?.alive || v.glitch || p.room !== v.room) return null;
+      if (!p || !isGlitch(p) || !p.alive || !v?.alive || isGlitch(v) || p.room !== v.room) return null;
       if (Date.now() < p.killReadyAt) return null;
       const witnesses = cur.players.filter(
-        (x) => x.alive && !x.glitch && x.room === p.room && x.userId !== p.userId && x.userId !== v.userId,
+        (x) => x.alive && !isGlitch(x) && x.room === p.room && x.userId !== p.userId && x.userId !== v.userId,
       );
       if (witnesses.length > 0) return null;
       return {
         ...cur,
         players: cur.players.map((x) => {
-          if (x.userId === v.userId) return { ...x, alive: false };
+          if (x.userId === v.userId) return { ...x, alive: false, disguiseAs: null };
           if (x.userId === p.userId) return { ...x, killReadyAt: Date.now() + KILL_MS, lastActionAt: Date.now() };
           return x;
         }),
@@ -265,10 +543,10 @@ function CrewBoard({ room, me, commit }: MatchContext) {
   };
 
   const doSabotage = (kind: "power" | "alarm") => {
-    if (!self.glitch || s.phase !== "play" || s.sabotage) return;
+    if (!isGlitch(self) || s.phase !== "play" || s.sabotage) return;
     void run((cur) => {
       const p = cur.players.find((x) => x.userId === self.userId);
-      if (!p?.glitch || !p.alive || cur.sabotage) return null;
+      if (!p || !isGlitch(p) || !p.alive || cur.sabotage) return null;
       return {
         ...cur,
         sabotage: { kind, endsAt: Date.now() + SABOTAGE_MS },
@@ -277,6 +555,33 @@ function CrewBoard({ room, me, commit }: MatchContext) {
       };
     });
     playBonk();
+  };
+
+  const doMimic = (targetId: string) => {
+    if (self.role !== "mimic" || s.phase !== "play" || mimicCd > 0 || mimicActive) return;
+    void run((cur) => {
+      const p = cur.players.find((x) => x.userId === self.userId);
+      const t = cur.players.find((x) => x.userId === targetId);
+      if (!p || p.role !== "mimic" || !p.alive || !t?.alive || t.userId === p.userId) return null;
+      if (Date.now() < p.mimicReadyAt) return null;
+      const until = Date.now() + MIMIC_MS;
+      return {
+        ...cur,
+        players: cur.players.map((x) =>
+          x.userId === p.userId
+            ? {
+                ...x,
+                disguiseAs: t.userId,
+                disguiseUntil: until,
+                mimicReadyAt: until + MIMIC_CD_MS - MIMIC_MS,
+                lastActionAt: Date.now(),
+              }
+            : x,
+        ),
+        log: `${p.name} shimmered… someone looks familiar.`,
+      };
+    });
+    playTap();
   };
 
   const report = () => {
@@ -292,6 +597,7 @@ function CrewBoard({ room, me, commit }: MatchContext) {
         bodies: cur.bodies.filter((b) => b.room !== p.room),
         meetingCaller: p.name,
         votes: {},
+        players: cur.players.map((x) => ({ ...x, disguiseAs: null, disguiseUntil: 0 })),
         log: `${p.name} found ${body.name} in ${ROOMS[p.room].label}! Staff huddle.`,
       };
     });
@@ -309,6 +615,7 @@ function CrewBoard({ room, me, commit }: MatchContext) {
         emergencyLeft: cur.emergencyLeft - 1,
         meetingCaller: p.name,
         votes: {},
+        players: cur.players.map((x) => ({ ...x, disguiseAs: null, disguiseUntil: 0 })),
         log: `${p.name} slammed the lobby button! Emergency huddle.`,
       };
     });
@@ -334,45 +641,21 @@ function CrewBoard({ room, me, commit }: MatchContext) {
       if (cur.phase !== "vote") return null;
       const alive = cur.players.filter((p) => p.alive);
       if (alive.some((p) => cur.votes[p.userId] === undefined)) return null;
-      const tallies = new Map<string, number>();
-      for (const t of Object.values(cur.votes)) tallies.set(t, (tallies.get(t) ?? 0) + 1);
-      let best = "skip";
-      let bestN = -1;
-      let tie = false;
-      for (const [id, n] of tallies) {
-        if (n > bestN) {
-          best = id;
-          bestN = n;
-          tie = false;
-        } else if (n === bestN) tie = true;
-      }
-      if (tie || best === "skip") {
-        return { ...cur, phase: "play", meetingCaller: null, votes: {}, log: "No consensus — back to closing." };
-      }
-      const ejected = cur.players.find((p) => p.userId === best);
-      if (!ejected) return null;
-      return {
-        ...cur,
-        phase: "play",
-        players: cur.players.map((p) => (p.userId === best ? { ...p, alive: false } : p)),
-        meetingCaller: null,
-        votes: {},
-        log: `${ejected.name} ejected — ${ejected.glitch ? "was a GLITCH" : "was staff"}.`,
-      };
+      return withWins(resolveVotes(cur));
     });
   };
 
   if (s.phase === "done") {
     return (
-      <div className="chunky-lg relative mx-auto max-w-lg space-y-4 overflow-hidden rounded-xl bg-paper p-6 text-center">
+      <div className="relative mx-auto max-w-lg space-y-4 overflow-hidden rounded-xl border-[3px] border-ink bg-paper p-6 text-center">
         <Confetti show={s.winner === "staff"} />
         <p className="font-[family-name:var(--font-display)] text-3xl">{s.winner === "staff" ? "Staff wins" : "Glitches win"}</p>
         <p className="font-bold">{s.log}</p>
-        <ul className="space-y-1 text-sm font-bold">
+        <ul className="space-y-2 text-sm font-bold">
           {s.players.map((p) => (
             <li key={p.userId} className="flex items-center justify-center gap-2">
-              <span className="h-3 w-3 rounded-full border border-ink" style={{ background: p.color }} />
-              {p.name}: {p.glitch ? "GLITCH" : "staff"}
+              <Gumdrop color={p.color} size={28} dead={!p.alive} />
+              {p.name}: {ROLE_META[p.role].label}
               {!p.alive ? " · out" : ""}
             </li>
           ))}
@@ -381,19 +664,24 @@ function CrewBoard({ room, me, commit }: MatchContext) {
     );
   }
 
-  const victimsHere = s.players.filter((p) => p.alive && !p.glitch && p.room === self.room && p.userId !== self.userId);
-  const otherStaffHere = victimsHere;
-
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div className="chunky-lg rounded-xl bg-paper p-4">
+      <div className="rounded-xl border-[3px] border-ink bg-paper p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 font-black">
-            <span className="h-5 w-5 rounded-full border-2 border-ink" style={{ background: self.color }} />
-            {self.name}
-            <span className={`rounded border-2 border-ink px-2 py-0.5 text-[10px] uppercase ${self.glitch ? "bg-coral text-white" : "bg-lime"}`}>
-              {self.alive ? (self.glitch ? "Glitch" : "Staff") : "Out"}
+            <Gumdrop color={self.color} size={40} dead={!self.alive} label={self.name} />
+            <div>
+              <p>{self.name}</p>
+              <p className="text-[11px] font-bold text-ink/60">{roleMeta.blurb}</p>
+            </div>
+            <span
+              className={`rounded border-2 border-ink px-2 py-0.5 text-[10px] uppercase ${
+                isGlitch(self) ? "bg-coral text-white" : self.role === "tech" ? "bg-sky text-white" : "bg-lime"
+              }`}
+            >
+              {self.alive ? roleMeta.label : "Out"}
             </span>
+            {mimicActive && <span className="rounded border-2 border-ink bg-plum px-2 py-0.5 text-[10px] text-white">MIMICKING</span>}
           </div>
           <p className="text-sm font-bold">
             Jobs {done}/{s.tasksNeeded}
@@ -401,48 +689,19 @@ function CrewBoard({ room, me, commit }: MatchContext) {
         </div>
         <p className="text-center text-sm font-extrabold">{s.log}</p>
         {s.sabotage && (
-          <div className={`mt-2 rounded-md border-[3px] border-ink px-3 py-2 text-center text-sm font-black ${s.sabotage.kind === "alarm" ? "animate-pulse bg-coral text-white" : "bg-ink text-white"}`}>
+          <div
+            className={`mt-2 rounded-md border-[3px] border-ink px-3 py-2 text-center text-sm font-black ${
+              s.sabotage.kind === "alarm" ? "animate-pulse bg-coral text-white" : "bg-ink text-white"
+            }`}
+          >
             {s.sabotage.kind === "power" ? "💡 POWER OUT" : "🚨 ALARM"} · {sabLeft}s
           </div>
         )}
-        {!self.alive && <p className="mt-2 text-center text-sm font-bold text-ink/60">You&apos;re out — spectate and vote in huddles.</p>}
       </div>
 
       {(s.phase === "play" || localTask) && (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {ROOM_ORDER.map((id) => {
-              const r = ROOMS[id];
-              const here = s.players.filter((p) => p.alive && p.room === id);
-              const body = s.bodies.some((b) => b.room === id);
-              const canMove = self.alive && ROOMS[self.room].neighbors.includes(id);
-              const isHere = self.room === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  disabled={(!canMove && !isHere) || localTask || busy || !self.alive || s.phase !== "play"}
-                  onClick={() => canMove && moveTo(id)}
-                  className={`rounded-lg border-[3px] border-ink p-2 text-left disabled:opacity-40 ${isHere ? "bg-butter" : canMove ? "bg-white hover:bg-lime/40" : "bg-paper"}`}
-                >
-                  <p className="text-sm font-black">
-                    {r.emoji} {r.label}
-                  </p>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {here.map((p) => (
-                      <span
-                        key={p.userId}
-                        title={powerOut && p.userId !== self.userId ? "?" : p.name}
-                        className="h-3 w-3 rounded-full border border-ink"
-                        style={{ background: powerOut && p.userId !== self.userId ? "#444" : p.color }}
-                      />
-                    ))}
-                    {body && <span className="text-xs">💀</span>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <ArcadeMap s={s} self={self} now={now} powerOut={!!powerOut} onMove={moveTo} disabled={localTask || busy || s.phase !== "play"} />
 
           {localTask && self.alive ? (
             <TaskPanel
@@ -460,17 +719,30 @@ function CrewBoard({ room, me, commit }: MatchContext) {
             self.alive &&
             s.phase === "play" && (
               <div className="flex flex-wrap justify-center gap-2">
-                {!self.glitch && (
+                {!isGlitch(self) && (
                   <button
                     type="button"
                     className="btn-chunky rounded-md bg-sky px-4 py-2 text-sm text-white disabled:opacity-40"
-                    disabled={busy || (powerOut && self.room !== "tickets" && self.room !== "floor")}
+                    disabled={busy || (!!powerOut && self.room !== "tickets" && self.room !== "floor")}
                     onClick={startTask}
                   >
                     Do: {ROOMS[self.room].task}
                   </button>
                 )}
-                {self.glitch && (
+                {canVent(self) &&
+                  ductExits.map((id) => (
+                    <button
+                      key={`duct-${id}`}
+                      type="button"
+                      disabled={busy || ventCd > 0}
+                      className="btn-chunky rounded-md bg-butter px-3 py-2 text-sm disabled:opacity-40"
+                      onClick={() => ventTo(id)}
+                    >
+                      Duct → {ROOMS[id].label}
+                      {ventCd > 0 ? ` (${ventCd})` : ""}
+                    </button>
+                  ))}
+                {isGlitch(self) && (
                   <>
                     <button type="button" className="btn-chunky rounded-md bg-paper px-4 py-2 text-sm" onClick={fakeTask}>
                       Look busy
@@ -479,7 +751,7 @@ function CrewBoard({ room, me, commit }: MatchContext) {
                       <button
                         key={v.userId}
                         type="button"
-                        disabled={busy || killCd > 0 || otherStaffHere.length > 1}
+                        disabled={busy || killCd > 0 || victimsHere.length > 1}
                         className="btn-chunky rounded-md bg-coral px-3 py-2 text-sm text-white disabled:opacity-40"
                         onClick={() => doKill(v.userId)}
                       >
@@ -499,6 +771,21 @@ function CrewBoard({ room, me, commit }: MatchContext) {
                     )}
                   </>
                 )}
+                {self.role === "mimic" &&
+                  s.players
+                    .filter((p) => p.alive && p.userId !== self.userId)
+                    .map((t) => (
+                      <button
+                        key={`mimic-${t.userId}`}
+                        type="button"
+                        disabled={busy || mimicCd > 0 || mimicActive}
+                        className="btn-chunky rounded-md bg-plum px-3 py-2 text-sm text-white disabled:opacity-40"
+                        onClick={() => doMimic(t.userId)}
+                      >
+                        Mimic {t.name}
+                        {mimicCd > 0 ? ` (${mimicCd})` : ""}
+                      </button>
+                    ))}
                 {s.bodies.some((b) => b.room === self.room) && (
                   <button type="button" className="btn-chunky rounded-md bg-butter px-4 py-2 text-sm" onClick={report}>
                     Report!
@@ -512,20 +799,32 @@ function CrewBoard({ room, me, commit }: MatchContext) {
               </div>
             )
           )}
+
+          <div className="flex flex-wrap justify-center gap-3">
+            {s.players.map((p) => {
+              const look = apparent(p, s.players, self.userId, now);
+              return (
+                <div key={p.userId} className="flex flex-col items-center gap-0.5">
+                  <Gumdrop color={look.color} size={32} dead={!p.alive} ghost={!p.alive} label={look.name} />
+                  <span className="max-w-[4.5rem] truncate text-[10px] font-bold">{look.name}</span>
+                </div>
+              );
+            })}
+          </div>
         </>
       )}
 
       {(s.phase === "meeting" || s.phase === "vote") && (
-        <div className="chunky-lg space-y-3 rounded-xl bg-paper p-4">
+        <div className="space-y-3 rounded-xl border-[3px] border-ink bg-paper p-4">
           <p className="text-center text-sm font-bold text-ink/70">Huddle by {s.meetingCaller}. Talk it out — then vote.</p>
-          <div className="flex flex-wrap justify-center gap-2">
+          <div className="flex flex-wrap justify-center gap-3">
             {s.players
               .filter((p) => p.alive)
               .map((p) => (
-                <span key={p.userId} className="inline-flex items-center gap-1 rounded-md border-2 border-ink bg-white px-2 py-1 text-xs font-bold">
-                  <span className="h-3 w-3 rounded-full border border-ink" style={{ background: p.color }} />
-                  {p.name}
-                </span>
+                <div key={p.userId} className="flex flex-col items-center">
+                  <Gumdrop color={p.color} size={44} />
+                  <span className="text-xs font-bold">{p.name}</span>
+                </div>
               ))}
           </div>
           {s.phase === "meeting" && (
@@ -544,9 +843,12 @@ function CrewBoard({ room, me, commit }: MatchContext) {
                     <button
                       key={t.userId}
                       type="button"
-                      className={`btn-chunky rounded-md px-3 py-1.5 text-sm ${s.votes[self.userId] === t.userId ? "bg-coral text-white" : "bg-white"}`}
+                      className={`btn-chunky flex items-center gap-1 rounded-md px-3 py-1.5 text-sm ${
+                        s.votes[self.userId] === t.userId ? "bg-coral text-white" : "bg-white"
+                      }`}
                       onClick={() => cast(t.userId)}
                     >
+                      <Gumdrop color={t.color} size={22} />
                       {t.name}
                     </button>
                   ))}
@@ -574,7 +876,7 @@ function CrewBoard({ room, me, commit }: MatchContext) {
       )}
 
       <p className="text-center text-xs font-semibold text-ink/55">
-        Staff finish closing jobs. Glitches delete the shift. Move, task, report, vote.
+        Gumdrop crew on a flat floor plan. Roles: Closer, Tech (ducts), Glitch, Mimic (shapeshift).
       </p>
     </div>
   );
@@ -605,7 +907,7 @@ function TaskPanel({
 
   if (meta.kind === "wires") {
     return (
-      <div className="chunky-lg space-y-3 rounded-xl bg-paper p-4 text-center">
+      <div className="space-y-3 rounded-xl border-[3px] border-ink bg-paper p-4 text-center">
         <p className="font-black">{meta.task}</p>
         <p className="text-sm font-semibold">Match the cable colors</p>
         <div className="flex justify-center gap-6">
@@ -642,7 +944,7 @@ function TaskPanel({
 
   if (meta.kind === "hold") {
     return (
-      <div className="chunky-lg space-y-3 rounded-xl bg-paper p-4 text-center">
+      <div className="space-y-3 rounded-xl border-[3px] border-ink bg-paper p-4 text-center">
         <p className="font-black">{meta.task}</p>
         <p className="text-sm">Hold — release in the green zone</p>
         <div className="relative h-4 overflow-hidden rounded-full border-[3px] border-ink bg-paper">
@@ -682,7 +984,7 @@ function TaskPanel({
   }
 
   return (
-    <div className="chunky-lg space-y-3 rounded-xl bg-paper p-4 text-center">
+    <div className="space-y-3 rounded-xl border-[3px] border-ink bg-paper p-4 text-center">
       <p className="font-black">{meta.task}</p>
       <p className="text-sm">Tap {5 - prog} more times</p>
       <button
@@ -704,18 +1006,12 @@ function TaskPanel({
   );
 }
 
-const BOT_NAMES = ["Rivet", "Token", "Plush", "Cabinet", "Till", "Dockbot", "Neon", "Joystick"];
-const HUMAN_ID = "local-you";
-
 function pickBotAction(s: CrewState, bot: CrewPlayer): CrewState | null {
   const now = Date.now();
   if (!bot.alive || s.phase === "done") return null;
 
   if (s.phase === "meeting") {
-    // Any seat can open voting after a short huddle.
-    if (now - (bot.lastActionAt || 0) > 2200) {
-      return { ...s, phase: "vote", votes: {}, log: "Voting opens." };
-    }
+    if (now - bot.lastActionAt > 2200) return { ...s, phase: "vote", votes: {}, log: "Voting opens." };
     return null;
   }
 
@@ -723,42 +1019,53 @@ function pickBotAction(s: CrewState, bot: CrewPlayer): CrewState | null {
     if (s.votes[bot.userId] !== undefined) return null;
     const aliveOthers = s.players.filter((p) => p.alive && p.userId !== bot.userId);
     let target: string | "skip" = "skip";
-    if (bot.glitch) {
-      // Glitches try to eject staff, prefer someone not themselves.
-      const staff = aliveOthers.filter((p) => !p.glitch);
+    if (isGlitch(bot)) {
+      const staff = aliveOthers.filter((p) => !isGlitch(p));
       target = staff[Math.floor(Math.random() * staff.length)]?.userId ?? "skip";
     } else {
-      // Staff: slight bias toward quieter / less-tasked players as "suspicious".
       const ranked = [...aliveOthers].sort((a, b) => a.tasksDone - b.tasksDone);
       if (Math.random() < 0.65 && ranked[0]) target = ranked[0].userId;
-      else target = "skip";
     }
     const votes = { ...s.votes, [bot.userId]: target };
     const alive = s.players.filter((p) => p.alive);
-    if (alive.every((p) => votes[p.userId] !== undefined)) {
-      return resolveVotes({ ...s, votes });
-    }
+    if (alive.every((p) => votes[p.userId] !== undefined)) return resolveVotes({ ...s, votes });
     return { ...s, votes };
   }
 
   if (s.phase !== "play") return null;
   if (now - bot.lastActionAt < ACTION_MS + 200) return null;
 
-  // Report body in room
   const body = s.bodies.find((b) => b.room === bot.room);
-  if (body && !bot.glitch) {
+  if (body && !isGlitch(bot)) {
     return {
       ...s,
       phase: "meeting",
       bodies: s.bodies.filter((b) => b.room !== bot.room),
       meetingCaller: bot.name,
       votes: {},
+      players: s.players.map((x) => ({ ...x, disguiseAs: null, disguiseUntil: 0 })),
       log: `${bot.name} found ${body.name} in ${ROOMS[bot.room].label}!`,
     };
   }
 
-  if (bot.glitch) {
-    const staffHere = s.players.filter((p) => p.alive && !p.glitch && p.room === bot.room);
+  if (isGlitch(bot)) {
+    if (bot.role === "mimic" && !bot.disguiseAs && now >= bot.mimicReadyAt && Math.random() < 0.2) {
+      const targets = s.players.filter((p) => p.alive && p.userId !== bot.userId);
+      const t = targets[Math.floor(Math.random() * targets.length)];
+      if (t) {
+        const until = now + MIMIC_MS;
+        return {
+          ...s,
+          players: s.players.map((x) =>
+            x.userId === bot.userId
+              ? { ...x, disguiseAs: t.userId, disguiseUntil: until, mimicReadyAt: until + MIMIC_CD_MS - MIMIC_MS, lastActionAt: now }
+              : x,
+          ),
+          log: `${bot.name} shimmered…`,
+        };
+      }
+    }
+    const staffHere = s.players.filter((p) => p.alive && !isGlitch(p) && p.room === bot.room);
     if (staffHere.length === 1 && now >= bot.killReadyAt) {
       const v = staffHere[0]!;
       return {
@@ -772,7 +1079,7 @@ function pickBotAction(s: CrewState, bot: CrewPlayer): CrewState | null {
         log: "Someone was deleted from the shift…",
       };
     }
-    if (!s.sabotage && Math.random() < 0.12) {
+    if (!s.sabotage && Math.random() < 0.1) {
       const kind = Math.random() < 0.5 ? ("power" as const) : ("alarm" as const);
       return {
         ...s,
@@ -781,8 +1088,33 @@ function pickBotAction(s: CrewState, bot: CrewPlayer): CrewState | null {
         log: kind === "power" ? "🚨 POWER OUT — fix Tickets or Machine Floor!" : "🚨 ALARM — silence it in Lobby or Dock!",
       };
     }
+    if (canVent(bot) && now >= bot.ventReadyAt && Math.random() < 0.35) {
+      const exits = DUCTS[bot.room] ?? [];
+      if (exits.length) {
+        const nextRoom = exits[Math.floor(Math.random() * exits.length)]!;
+        return {
+          ...s,
+          players: s.players.map((x) =>
+            x.userId === bot.userId ? { ...x, room: nextRoom, lastActionAt: now, ventReadyAt: now + VENT_MS } : x,
+          ),
+          log: `${bot.name} used a duct → ${ROOMS[nextRoom].label}`,
+        };
+      }
+    }
   } else {
-    // Staff tasks / fix sabotage
+    if (bot.role === "tech" && now >= bot.ventReadyAt && Math.random() < 0.25) {
+      const exits = DUCTS[bot.room] ?? [];
+      if (exits.length) {
+        const nextRoom = exits[Math.floor(Math.random() * exits.length)]!;
+        return {
+          ...s,
+          players: s.players.map((x) =>
+            x.userId === bot.userId ? { ...x, room: nextRoom, lastActionAt: now, ventReadyAt: now + VENT_MS } : x,
+          ),
+          log: `${bot.name} ducted → ${ROOMS[nextRoom].label}`,
+        };
+      }
+    }
     const powerOut = s.sabotage?.kind === "power";
     const canTask = !(powerOut && bot.room !== "tickets" && bot.room !== "floor");
     if (canTask && Math.random() < 0.55) {
@@ -807,101 +1139,47 @@ function pickBotAction(s: CrewState, bot: CrewPlayer): CrewState | null {
     }
   }
 
-  // Move
   let neighbors = ROOMS[bot.room].neighbors;
-  if (bot.glitch) {
-    // Chase nearest staff room if possible
-    const staffRooms = new Set(s.players.filter((p) => p.alive && !p.glitch).map((p) => p.room));
+  if (isGlitch(bot)) {
+    const staffRooms = new Set(s.players.filter((p) => p.alive && !isGlitch(p)).map((p) => p.room));
     const chase = neighbors.filter((r) => staffRooms.has(r));
     if (chase.length) neighbors = chase;
   } else if (s.sabotage?.kind === "power") {
     const fix = neighbors.filter((r) => r === "tickets" || r === "floor");
     if (fix.length) neighbors = fix;
-    else if (bot.room !== "tickets" && bot.room !== "floor") {
-      // Prefer moving toward floor/tickets via any neighbor
-      neighbors = [...neighbors].sort((a, b) => {
-        const score = (id: RoomId) => (id === "tickets" || id === "floor" ? 0 : 1);
-        return score(a) - score(b);
-      });
-    }
   } else if (s.sabotage?.kind === "alarm") {
     const fix = neighbors.filter((r) => r === "lobby" || r === "dock");
     if (fix.length) neighbors = fix;
-  } else if (s.bodies.length && !bot.glitch) {
-    const bodyRooms = new Set(s.bodies.map((b) => b.room));
-    const toward = neighbors.filter((r) => bodyRooms.has(r));
-    if (toward.length) neighbors = toward;
   }
 
   const nextRoom = neighbors[Math.floor(Math.random() * neighbors.length)];
   if (!nextRoom) return null;
   return {
     ...s,
-    players: s.players.map((x) =>
-      x.userId === bot.userId ? { ...x, room: nextRoom, lastActionAt: now } : x,
-    ),
+    players: s.players.map((x) => (x.userId === bot.userId ? { ...x, room: nextRoom, lastActionAt: now } : x)),
     log: `${bot.name} → ${ROOMS[nextRoom].label}`,
-  };
-}
-
-function resolveVotes(cur: CrewState): CrewState {
-  const tallies = new Map<string, number>();
-  for (const t of Object.values(cur.votes)) tallies.set(t, (tallies.get(t) ?? 0) + 1);
-  let best = "skip";
-  let bestN = -1;
-  let tie = false;
-  for (const [id, n] of tallies) {
-    if (n > bestN) {
-      best = id;
-      bestN = n;
-      tie = false;
-    } else if (n === bestN) tie = true;
-  }
-  if (tie || best === "skip") {
-    return { ...cur, phase: "play", meetingCaller: null, votes: {}, log: "No consensus — back to closing." };
-  }
-  const ejected = cur.players.find((p) => p.userId === best);
-  if (!ejected) return { ...cur, phase: "play", meetingCaller: null, votes: {}, log: "Vote fizzled." };
-  return {
-    ...cur,
-    phase: "play",
-    players: cur.players.map((p) => (p.userId === best ? { ...p, alive: false } : p)),
-    meetingCaller: null,
-    votes: {},
-    log: `${ejected.name} ejected — ${ejected.glitch ? "was a GLITCH" : "was staff"}.`,
   };
 }
 
 function advanceBots(s: CrewState, humanId: string): CrewState {
   if (s.phase === "done") return s;
-  let cur = s;
+  let cur = clearExpiredDisguises(s);
   const bots = cur.players.filter((p) => p.userId !== humanId && p.alive);
-  // One action per tick from a random bot (keeps pace readable)
-  const order = shuffle(bots);
-  for (const bot of order) {
+  for (const bot of shuffle(bots)) {
     const next = pickBotAction(cur, bot);
     if (next) {
       cur = withWins(next);
       break;
     }
   }
-  // Auto-resolve votes if everyone but somehow stuck
   if (cur.phase === "vote") {
     const alive = cur.players.filter((p) => p.alive);
-    if (alive.every((p) => cur.votes[p.userId] !== undefined)) {
-      cur = withWins(resolveVotes(cur));
-    }
+    if (alive.every((p) => cur.votes[p.userId] !== undefined)) cur = withWins(resolveVotes(cur));
   }
   return cur;
 }
 
-function OfflineCrewMatch({
-  onBack,
-  totalPlayers,
-}: {
-  onBack: () => void;
-  totalPlayers: number;
-}) {
+function OfflineCrewMatch({ onBack, totalPlayers }: { onBack: () => void; totalPlayers: number }) {
   const matchPlayers: MatchPlayer[] = useMemo(() => {
     const list: MatchPlayer[] = [
       {
@@ -943,10 +1221,7 @@ function OfflineCrewMatch({
   const me = matchPlayers[0]!;
 
   const commit = useCallback(
-    async (
-      mutate: (state: Record<string, unknown>) => Record<string, unknown> | null,
-      status?: Room["status"],
-    ) => {
+    async (mutate: (state: Record<string, unknown>) => Record<string, unknown> | null, status?: Room["status"]) => {
       setRoom((prev) => {
         const nextState = mutate(structuredClone(prev.state) as Record<string, unknown>);
         if (!nextState) return prev;
@@ -962,16 +1237,6 @@ function OfflineCrewMatch({
     [],
   );
 
-  const pushState = useCallback(async (state: Record<string, unknown>, status?: Room["status"]) => {
-    setRoom((prev) => ({
-      ...prev,
-      state: withWins(parse(state)) as unknown as Record<string, unknown>,
-      status: status ?? prev.status,
-      version: prev.version + 1,
-      updated_at: new Date().toISOString(),
-    }));
-  }, []);
-
   useEffect(() => {
     const id = window.setInterval(() => {
       setRoom((prev) => {
@@ -979,17 +1244,6 @@ function OfflineCrewMatch({
         const cur = parse(prev.state);
         if (cur.phase === "done") return prev;
         const next = advanceBots(cur, HUMAN_ID);
-        if (next === cur) {
-          // Still check sabotage timeout
-          const checked = withWins(cur);
-          if (checked === cur) return prev;
-          return {
-            ...prev,
-            state: checked as unknown as Record<string, unknown>,
-            version: prev.version + 1,
-            updated_at: new Date().toISOString(),
-          };
-        }
         return {
           ...prev,
           state: next as unknown as Record<string, unknown>,
@@ -1009,14 +1263,7 @@ function OfflineCrewMatch({
         </button>
         <p className="text-sm font-bold">Crew Check · Offline bots</p>
       </div>
-      <CrewBoard
-        room={room}
-        players={matchPlayers}
-        me={me}
-        isHost
-        pushState={pushState}
-        commit={commit}
-      />
+      <CrewBoard room={room} players={matchPlayers} me={me} isHost pushState={async () => {}} commit={commit} />
     </div>
   );
 }
@@ -1045,16 +1292,14 @@ export function CrewCheckGame({ onBack }: { onBack: () => void }) {
 
   if (mode === "offline-setup") {
     return (
-      <div className="chunky-lg mx-auto max-w-lg rounded-xl bg-paper p-6">
+      <div className="mx-auto max-w-lg rounded-xl border-[3px] border-ink bg-paper p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="font-[family-name:var(--font-display)] text-2xl">Offline with bots</h2>
           <button type="button" className="btn-chunky rounded-md bg-paper px-3 py-1.5 text-sm" onClick={() => setMode("pick")}>
             ← Back
           </button>
         </div>
-        <p className="mb-4 text-sm font-semibold text-ink/70">
-          You plus bots on one device. Practice the night shift without a lobby.
-        </p>
+        <p className="mb-4 text-sm font-semibold text-ink/70">You plus gumdrop bots. Roles include Tech (ducts) and Mimic (shapeshift).</p>
         <label className="mb-2 block text-sm font-extrabold">Players (you + bots)</label>
         <div className="mb-4 flex flex-wrap gap-2">
           {[4, 5, 6, 7, 8].map((n) => (
@@ -1068,9 +1313,6 @@ export function CrewCheckGame({ onBack }: { onBack: () => void }) {
             </button>
           ))}
         </div>
-        <p className="mb-4 text-xs font-semibold text-ink/55">
-          {botPlayers - 1} bots · {botPlayers >= 7 ? "2 glitches" : "1 glitch"}
-        </p>
         <button
           type="button"
           className="btn-chunky w-full rounded-md bg-coral px-4 py-3 font-extrabold text-white"
@@ -1086,16 +1328,19 @@ export function CrewCheckGame({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="chunky-lg mx-auto max-w-lg rounded-xl bg-paper p-6">
+    <div className="mx-auto max-w-lg rounded-xl border-[3px] border-ink bg-paper p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="font-[family-name:var(--font-display)] text-2xl">Crew Check</h2>
         <button type="button" className="btn-chunky rounded-md bg-paper px-3 py-1.5 text-sm" onClick={onBack}>
           ← Back
         </button>
       </div>
-      <p className="mb-5 text-sm font-semibold text-ink/70">
-        Box Arcade night shift — finish closing jobs, or get deleted by glitches.
-      </p>
+      <div className="mb-4 flex justify-center gap-2">
+        {COLORS.slice(0, 5).map((c) => (
+          <Gumdrop key={c} color={c} size={34} />
+        ))}
+      </div>
+      <p className="mb-5 text-sm font-semibold text-ink/70">Flat arcade floor plan. Gumdrop crew. Roles: Closer, Tech, Glitch, Mimic.</p>
       <div className="space-y-3">
         <button
           type="button"
@@ -1106,7 +1351,7 @@ export function CrewCheckGame({ onBack }: { onBack: () => void }) {
           }}
         >
           <span className="block text-base">Online multiplayer</span>
-          <span className="block text-xs font-semibold opacity-80">Create, browse public servers, or join a code</span>
+          <span className="block text-xs font-semibold opacity-80">Public lobbies or invite code</span>
         </button>
         <button
           type="button"
@@ -1117,7 +1362,7 @@ export function CrewCheckGame({ onBack }: { onBack: () => void }) {
           }}
         >
           <span className="block text-base">Offline with bots</span>
-          <span className="block text-xs font-semibold opacity-80">Solo practice — no account needed</span>
+          <span className="block text-xs font-semibold opacity-80">Practice roles — no account</span>
         </button>
       </div>
     </div>
