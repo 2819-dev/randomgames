@@ -69,6 +69,33 @@ export async function applyRoomState(params: {
   return data as Room;
 }
 
+/** Optimistic concurrent updates — retries on version conflict. */
+export async function commitRoomState(
+  roomId: string,
+  mutate: (state: Record<string, unknown>) => Record<string, unknown> | null,
+  status?: RoomStatus,
+  retries = 6,
+): Promise<Room> {
+  let lastError: unknown;
+  for (let i = 0; i < retries; i++) {
+    const bundle = await fetchRoomBundle(roomId);
+    const next = mutate(structuredClone(bundle.room.state) as Record<string, unknown>);
+    if (!next) return bundle.room;
+    try {
+      return await applyRoomState({
+        roomId,
+        expectedVersion: bundle.room.version,
+        state: next,
+        status,
+      });
+    } catch (e) {
+      lastError = e;
+      await new Promise((r) => setTimeout(r, 35 + i * 45));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Could not sync — try again");
+}
+
 export function subscribeRoom(roomId: string, onChange: () => void): () => void {
   const channel: RealtimeChannel = supabase
     .channel(`room:${roomId}`)

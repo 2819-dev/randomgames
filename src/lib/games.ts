@@ -18,23 +18,23 @@ export const GAMES: GameMeta[] = [
   {
     id: "crewcheck",
     title: "Crew Check",
-    blurb: "Among Us energy: rooms, tasks, kills, sabotage, meetings, votes.",
-    time: "~15 min",
+    blurb: "Live online night shift at Box Arcade. Staff close up. Glitches delete.",
+    time: "~20 min",
     accent: "#ef4444",
     ink: "#fff",
-    sticker: "🕵️",
-    mode: "solo",
+    sticker: "🕹️",
+    mode: "online",
   },
 ];
 
 export const MODE_LABEL: Record<PlayMode, string> = {
   solo: "Party",
-  online: "With friends",
+  online: "Online · 4–8",
   both: "Solo or friends",
 };
 
 export const TAGLINES = [
-  "One game. Hidden impostors. Pass the phone.",
-  "Rooms, tasks, sabotage, meetings — finish the jobs or get ejected.",
-  "Among Us vibes. One screen. Your crew.",
+  "One arcade. Hidden glitches. Everyone on their own phone.",
+  "Close the night shift — or get deleted from it.",
+  "Among Us energy. Box Arcade soul. Real multiplayer.",
 ];

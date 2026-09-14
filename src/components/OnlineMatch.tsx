@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import {
   applyRoomState,
+  commitRoomState,
   createRoom,
   fetchRoomBundle,
   joinRoom,
@@ -26,6 +27,10 @@ export type MatchContext = {
   me: MatchPlayer;
   isHost: boolean;
   pushState: (state: Record<string, unknown>, status?: RoomStatus) => Promise<void>;
+  commit: (
+    mutate: (state: Record<string, unknown>) => Record<string, unknown> | null,
+    status?: RoomStatus,
+  ) => Promise<void>;
 };
 
 type Props = {
@@ -183,6 +188,15 @@ export function OnlineMatch({
     setRoom(next);
   };
 
+  const commit = async (
+    mutate: (state: Record<string, unknown>) => Record<string, unknown> | null,
+    status?: RoomStatus,
+  ) => {
+    if (!room) return;
+    const next = await commitRoomState(room.id, mutate, status);
+    setRoom(next);
+  };
+
   if (!user || !profile) {
     return (
       <div className="chunky-lg rounded-xl bg-paper p-6 text-center">
@@ -333,7 +347,7 @@ export function OnlineMatch({
           {title} · {room.code}
         </p>
       </div>
-      {renderGame({ room, players, me, isHost, pushState })}
+      {renderGame({ room, players, me, isHost, pushState, commit })}
     </div>
   );
 }

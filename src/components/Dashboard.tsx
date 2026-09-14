@@ -26,7 +26,7 @@ export function Dashboard() {
     <main className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col overflow-hidden px-4 py-8 sm:px-6 sm:py-12">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <p className="rounded-md border-[3px] border-ink bg-butter px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em]">
-          One game focus · pass & play
+          Online crew game · 4–8 players
         </p>
         <AuthButton />
       </div>
