@@ -4,31 +4,39 @@ let ctx: AudioContext | null = null;
 
 function audio() {
   if (typeof window === "undefined") return null;
-  if (!ctx) {
-    const AC =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    ctx = new AC();
+  try {
+    if (!ctx) {
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      ctx = new AC();
+    }
+    return ctx;
+  } catch {
+    return null;
   }
-  return ctx;
 }
 
 export function beep(freq = 440, duration = 0.08, type: OscillatorType = "square", gain = 0.04) {
-  const ac = audio();
-  if (!ac) return;
-  const osc = ac.createOscillator();
-  const g = ac.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-  g.gain.value = gain;
-  osc.connect(g);
-  g.connect(ac.destination);
-  const now = ac.currentTime;
-  g.gain.setValueAtTime(gain, now);
-  g.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  osc.start(now);
-  osc.stop(now + duration);
+  try {
+    const ac = audio();
+    if (!ac) return;
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.value = gain;
+    osc.connect(g);
+    g.connect(ac.destination);
+    const now = ac.currentTime;
+    g.gain.setValueAtTime(gain, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.start(now);
+    osc.stop(now + duration);
+  } catch {
+    /* audio optional */
+  }
 }
 
 export function playWin() {

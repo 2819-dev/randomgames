@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
-import { AuthButton, useAuthUser } from "@/components/AuthButton";
+import { AuthButton } from "@/components/AuthButton";
+import { useAuth } from "@/components/AuthProvider";
 import { GAMES, MODE_LABEL, TAGLINES, type GameId, type PlayMode } from "@/lib/games";
 import { playTap } from "@/lib/sfx";
 import { SnakeGame } from "@/components/games/Snake";
@@ -26,25 +27,70 @@ import { DodgeGame } from "@/components/games/Dodge";
 import { RumbleGame } from "@/components/games/Rumble";
 import { ClaimcraftGame } from "@/components/games/Claimcraft";
 import { CrewCheckGame } from "@/components/games/CrewCheck";
+import {
+  OnlineClaimcraft,
+  OnlineConnect,
+  OnlineGridlock,
+  OnlineOrLocal,
+  OnlinePulseDuel,
+  OnlineShowdown,
+  OnlineTicTacToe,
+} from "@/components/games/OnlineGames";
 
 type Filter = "all" | PlayMode;
 
 function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
   switch (id) {
+    case "pulseduel":
+      return <OnlinePulseDuel onBack={onBack} />;
+    case "gridlock":
+      return <OnlineGridlock onBack={onBack} />;
+    case "tictactoe":
+      return (
+        <OnlineOrLocal
+          title="Xs & Os"
+          onBack={onBack}
+          online={<OnlineTicTacToe onBack={onBack} />}
+          local={<TicTacToeGame onBack={onBack} />}
+        />
+      );
+    case "connect":
+      return (
+        <OnlineOrLocal
+          title="Connect 4"
+          onBack={onBack}
+          online={<OnlineConnect onBack={onBack} />}
+          local={<ConnectGame onBack={onBack} />}
+        />
+      );
+    case "showdown":
+      return (
+        <OnlineOrLocal
+          title="Showdown"
+          onBack={onBack}
+          online={<OnlineShowdown onBack={onBack} />}
+          local={<ShowdownGame onBack={onBack} />}
+        />
+      );
+    case "claimcraft":
+      return (
+        <OnlineOrLocal
+          title="Claimcraft"
+          onBack={onBack}
+          online={<OnlineClaimcraft onBack={onBack} />}
+          local={<ClaimcraftGame onBack={onBack} />}
+        />
+      );
     case "slither":
       return <SlitherGame onBack={onBack} />;
     case "rumble":
       return <RumbleGame onBack={onBack} />;
-    case "claimcraft":
-      return <ClaimcraftGame onBack={onBack} />;
     case "crewcheck":
       return <CrewCheckGame onBack={onBack} />;
     case "snake":
       return <SnakeGame onBack={onBack} />;
     case "memory":
       return <MemoryGame onBack={onBack} />;
-    case "tictactoe":
-      return <TicTacToeGame onBack={onBack} />;
     case "reaction":
       return <ReactionGame onBack={onBack} />;
     case "twenty48":
@@ -53,14 +99,10 @@ function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
       return <EchoGame onBack={onBack} />;
     case "whack":
       return <WhackGame onBack={onBack} />;
-    case "showdown":
-      return <ShowdownGame onBack={onBack} />;
     case "lights":
       return <LightsGame onBack={onBack} />;
     case "hangman":
       return <HangmanGame onBack={onBack} />;
-    case "connect":
-      return <ConnectGame onBack={onBack} />;
     case "higher":
       return <HigherLowerGame onBack={onBack} />;
     case "catch":
@@ -79,14 +121,14 @@ function GameView({ id, onBack }: { id: GameId; onBack: () => void }) {
 function matchesFilter(mode: PlayMode, filter: Filter) {
   if (filter === "all") return true;
   if (filter === "solo") return mode === "solo" || mode === "both";
-  if (filter === "local-multi") return mode === "local-multi" || mode === "both";
+  if (filter === "online") return mode === "online" || mode === "both";
   return mode === "both";
 }
 
 export function Dashboard() {
   const [active, setActive] = useState<GameId | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
-  const [user, setUser] = useAuthUser();
+  const { profile } = useAuth();
   const tagline = TAGLINES[0];
 
   const visible = useMemo(() => GAMES.filter((g) => matchesFilter(g.mode, filter)), [filter]);
@@ -113,9 +155,9 @@ export function Dashboard() {
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <p className="rounded-md border-[3px] border-ink bg-butter px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em]">
-          Offline arcade · installable
+          Online arcade · live rooms
         </p>
-        <AuthButton user={user} onChange={setUser} />
+        <AuthButton />
       </div>
 
       <header className="mb-8 max-w-2xl">
@@ -129,7 +171,7 @@ export function Dashboard() {
             priority
           />
           <p className="inline-block animate-wiggle rounded-md border-[3px] border-ink bg-lime px-3 py-1 text-xs font-extrabold uppercase tracking-[0.18em]">
-            Competitive couch energy
+            Real multiplayer
           </p>
         </div>
         <h1 className="animate-pop-in font-[family-name:var(--font-display)] text-5xl leading-[1.05] tracking-wide text-ink sm:text-7xl">
@@ -141,9 +183,9 @@ export function Dashboard() {
         >
           {tagline}
         </p>
-        {user && (
+        {profile && (
           <p className="mt-3 text-sm font-bold text-ink/70">
-            Playing as <span className="underline">{user.username}</span> — scores stay on this device.
+            Online as <span className="underline">{profile.username}</span> — create or join a live room.
           </p>
         )}
       </header>
@@ -152,9 +194,9 @@ export function Dashboard() {
         {(
           [
             ["all", "All games"],
-            ["solo", "Solo / offline"],
-            ["local-multi", "Local multi"],
-            ["both", "Solo + multi"],
+            ["online", "Online multi"],
+            ["solo", "Solo"],
+            ["both", "Solo + online"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -207,8 +249,8 @@ export function Dashboard() {
       </section>
 
       <footer className="mt-auto space-y-2 pt-12 text-sm font-semibold text-ink/55">
-        <p>Works offline after install · local login · Synk ID coming soon.</p>
-        <p>Tip: browser menu → Install / Add to Home Screen for the pocket arcade.</p>
+        <p>Log in for live multiplayer rooms. Solo games work without an account.</p>
+        <p>Tip: share a 6-character room code with a friend on another device.</p>
       </footer>
     </main>
   );

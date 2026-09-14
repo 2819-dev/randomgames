@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSession, register, signIn, signOut, SYNK_ID_URL, type LocalUser } from "@/lib/auth";
+import { useAuth } from "@/components/AuthProvider";
 import { playTap } from "@/lib/sfx";
 
-type Props = {
-  user: LocalUser | null;
-  onChange: (user: LocalUser | null) => void;
-};
-
-export function AuthButton({ user, onChange }: Props) {
+export function AuthButton() {
+  const { user, profile, loading, logout } = useAuth();
   const [open, setOpen] = useState(false);
 
   return (
@@ -17,21 +13,20 @@ export function AuthButton({ user, onChange }: Props) {
       <button
         type="button"
         onClick={() => {
-          playTap();
           setOpen(true);
+          playTap();
         }}
         className="btn-chunky rounded-md bg-paper px-3 py-1.5 text-sm"
-        aria-label={user ? `Account ${user.username}` : "Log in"}
+        aria-label={user ? `Account ${profile?.username || ""}` : "Log in"}
       >
-        {user ? `👤 ${user.username}` : "Log in"}
+        {user ? `👤 ${profile?.username || "player"}` : "Log in"}
       </button>
       {open && (
         <AuthModal
-          user={user}
           onClose={() => setOpen(false)}
-          onChange={(next) => {
-            onChange(next);
-            if (next) setOpen(false);
+          onLogout={async () => {
+            await logout();
+            setOpen(false);
           }}
         />
       )}
@@ -39,20 +34,20 @@ export function AuthButton({ user, onChange }: Props) {
   );
 }
 
-function AuthModal({
-  user,
-  onClose,
-  onChange,
-}: {
-  user: LocalUser | null;
-  onClose: () => void;
-  onChange: (user: LocalUser | null) => void;
-}) {
+function AuthModal({ onClose, onLogout }: { onClose: () => void; onLogout: () => Promise<void> }) {
+  const { user, profile, login, register } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setArmed(true), 0);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -67,11 +62,12 @@ function AuthModal({
     setError("");
     setBusy(true);
     try {
-      const next = mode === "login" ? await signIn(username, password) : await register(username, password);
+      if (mode === "login") await login(username, password);
+      else await register(username, password, displayName || username);
       playTap();
-      onChange(next);
+      onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : "Auth failed");
     } finally {
       setBusy(false);
     }
@@ -79,11 +75,13 @@ function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Account"
-      onClick={onClose}
+      aria-label="Online account"
+      onClick={() => {
+        if (armed) onClose();
+      }}
     >
       <div
         className="chunky-lg w-full max-w-md rounded-xl bg-paper p-5 sm:p-6"
@@ -92,10 +90,10 @@ function AuthModal({
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="font-[family-name:var(--font-display)] text-2xl tracking-wide">
-              {user ? "Your booth" : "Log in"}
+              {user ? "Online account" : "Log in to play online"}
             </h2>
             <p className="mt-1 text-sm font-medium text-ink/70">
-              Offline accounts live on this device only. Works with no internet.
+              Real accounts on Supabase. Needed for live multiplayer rooms.
             </p>
           </div>
           <button type="button" className="btn-chunky rounded-md bg-paper px-2 py-1 text-sm" onClick={onClose}>
@@ -106,19 +104,13 @@ function AuthModal({
         {user ? (
           <div className="space-y-4">
             <p className="rounded-md border-[3px] border-ink bg-lime/40 px-3 py-2 font-bold">
-              Signed in as <span className="underline">{user.username}</span>
-            </p>
-            <p className="text-sm font-semibold text-ink/70">
-              High scores stick to this username on this device. Add to Home Screen to keep the whole arcade offline.
+              Signed in as <span className="underline">{profile?.username}</span>
+              {profile?.display_name ? ` (${profile.display_name})` : ""}
             </p>
             <button
               type="button"
               className="btn-chunky rounded-md bg-coral px-4 py-2 text-sm text-white"
-              onClick={() => {
-                signOut();
-                onChange(null);
-                playTap();
-              }}
+              onClick={() => void onLogout()}
             >
               Sign out
             </button>
@@ -149,8 +141,22 @@ function AuthModal({
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
                 required
+                minLength={3}
+                maxLength={16}
+                pattern="[A-Za-z0-9_]+"
               />
             </label>
+            {mode === "register" && (
+              <label className="block text-sm font-bold">
+                Display name
+                <input
+                  className="mt-1 w-full rounded-md border-[3px] border-ink bg-white px-3 py-2 font-semibold outline-none"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  maxLength={24}
+                />
+              </label>
+            )}
             <label className="block text-sm font-bold">
               Password
               <input
@@ -160,6 +166,7 @@ function AuthModal({
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
                 required
+                minLength={6}
               />
             </label>
             {error && (
@@ -172,40 +179,11 @@ function AuthModal({
               disabled={busy}
               className="btn-chunky w-full rounded-md bg-sky px-4 py-2 font-extrabold text-white disabled:opacity-60"
             >
-              {busy ? "…" : mode === "login" ? "Enter arcade" : "Create local account"}
+              {busy ? "…" : mode === "login" ? "Enter online arcade" : "Create online account"}
             </button>
           </form>
         )}
-
-        <div className="mt-5 border-t-[3px] border-ink/15 pt-4">
-          <button
-            type="button"
-            disabled
-            className="btn-chunky flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-md bg-[#0b1220] px-4 py-2.5 text-sm font-extrabold text-white opacity-90"
-            title="Synk ID sign-in is coming soon"
-          >
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-black text-[#0b1220]">
-              S
-            </span>
-            Sign in with Synk ID — coming soon
-          </button>
-          <p className="mt-2 text-center text-xs font-semibold text-ink/55">
-            Synk ID sync later via{" "}
-            <a className="underline" href={SYNK_ID_URL} target="_blank" rel="noreferrer">
-              synkid.netlify.app
-            </a>
-            . Local login always works offline.
-          </p>
-        </div>
       </div>
     </div>
   );
-}
-
-export function useAuthUser() {
-  const [user, setUser] = useState<LocalUser | null>(null);
-  useEffect(() => {
-    setUser(getSession());
-  }, []);
-  return [user, setUser] as const;
 }

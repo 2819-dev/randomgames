@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bungee, Rubik } from "next/font/google";
+import { AuthProvider } from "@/components/AuthProvider";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 
@@ -17,7 +18,7 @@ const body = Rubik({
 export const metadata: Metadata = {
   title: "Bored Box — tiny games for restless brains",
   description:
-    "Competitive offline arcade — local multiplayer, solo high scores, installable PWA. Synk ID coming soon.",
+    "Online arcade with real multiplayer rooms — log in, share a code, play live. Solo games included.",
   applicationName: "Bored Box",
   appleWebApp: {
     capable: true,
@@ -48,7 +49,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${display.variable} ${body.variable} h-full`}>
       <body className="flex min-h-full flex-col antialiased">
         <ServiceWorkerRegister />
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

@@ -19,10 +19,12 @@ export type GameId =
   | "dodge"
   | "rumble"
   | "claimcraft"
-  | "crewcheck";
+  | "crewcheck"
+  | "pulseduel"
+  | "gridlock";
 
-/** How the game can be played on one device */
-export type PlayMode = "solo" | "local-multi" | "both";
+/** How the game can be played */
+export type PlayMode = "solo" | "online" | "both";
 
 export type GameMeta = {
   id: GameId;
@@ -37,32 +39,81 @@ export type GameMeta = {
 
 export const GAMES: GameMeta[] = [
   {
-    id: "slither",
-    title: "Slither",
-    blurb: "Cut bots, stack kill streaks, grab power pellets. Arena energy.",
-    time: "~5 min",
-    accent: "#c8f542",
-    sticker: "🪱",
-    mode: "solo",
-  },
-  {
-    id: "crewcheck",
-    title: "Crew Check",
-    blurb: "Pass-and-play sabotage. Find the impostor before tasks flop.",
-    time: "~8 min",
+    id: "pulseduel",
+    title: "Pulse Duel",
+    blurb: "Live reaction war. Wait for the pulse — don't tap early.",
+    time: "~3 min",
     accent: "#ef4444",
     ink: "#fff",
-    sticker: "🕵️",
-    mode: "local-multi",
+    sticker: "💓",
+    mode: "online",
+  },
+  {
+    id: "gridlock",
+    title: "Gridlock",
+    blurb: "Snatch glowing cells before your rival locks the board.",
+    time: "~2 min",
+    accent: "#22c55e",
+    sticker: "🔲",
+    mode: "online",
+  },
+  {
+    id: "tictactoe",
+    title: "Xs & Os",
+    blurb: "Live online duel — or roast the CPU on this device.",
+    time: "~1 min",
+    accent: "var(--coral)",
+    ink: "#fff",
+    sticker: "❌",
+    mode: "both",
+  },
+  {
+    id: "connect",
+    title: "Connect 4",
+    blurb: "Drop discs across the net. Real rooms, real rivals.",
+    time: "~3 min",
+    accent: "#f97316",
+    ink: "#fff",
+    sticker: "🔴",
+    mode: "both",
+  },
+  {
+    id: "showdown",
+    title: "Showdown",
+    blurb: "Rock-paper-scissors online. First to three wins.",
+    time: "~2 min",
+    accent: "#ff6bcb",
+    ink: "#fff",
+    sticker: "✊",
+    mode: "both",
   },
   {
     id: "claimcraft",
     title: "Claimcraft",
-    blurb: "Paint the grid. Defend chunks. Race bots — or a friend beside you.",
+    blurb: "Paint the grid live. Defend chunks against a real player.",
     time: "~4 min",
     accent: "#65a30d",
     sticker: "⛏️",
     mode: "both",
+  },
+  {
+    id: "crewcheck",
+    title: "Crew Check",
+    blurb: "Pass-and-play sabotage on one device.",
+    time: "~8 min",
+    accent: "#ef4444",
+    ink: "#fff",
+    sticker: "🕵️",
+    mode: "solo",
+  },
+  {
+    id: "slither",
+    title: "Slither",
+    blurb: "Cut bots, stack kill streaks, grab power pellets.",
+    time: "~5 min",
+    accent: "#c8f542",
+    sticker: "🪱",
+    mode: "solo",
   },
   {
     id: "rumble",
@@ -102,36 +153,6 @@ export const GAMES: GameMeta[] = [
     mode: "solo",
   },
   {
-    id: "tictactoe",
-    title: "Xs & Os",
-    blurb: "Duel a friend hot-seat, or roast the CPU.",
-    time: "~1 min",
-    accent: "var(--coral)",
-    ink: "#fff",
-    sticker: "❌",
-    mode: "both",
-  },
-  {
-    id: "connect",
-    title: "Connect 4",
-    blurb: "Drop discs. Best of friends — or beat the orange CPU.",
-    time: "~3 min",
-    accent: "#f97316",
-    ink: "#fff",
-    sticker: "🔴",
-    mode: "both",
-  },
-  {
-    id: "showdown",
-    title: "Showdown",
-    blurb: "Rock-paper-scissors face-off. CPU or couch rival.",
-    time: "~1 min",
-    accent: "#ff6bcb",
-    ink: "#fff",
-    sticker: "✊",
-    mode: "both",
-  },
-  {
     id: "snake",
     title: "Snek",
     blurb: "Classic high-score noodle. Don't hit yourself.",
@@ -152,7 +173,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "mines",
     title: "Mines",
-    blurb: "Solo logic clear. No multiplayer — pure brain sweat.",
+    blurb: "Solo logic clear. Pure brain sweat.",
     time: "~3 min",
     accent: "#94a3b8",
     sticker: "💣",
@@ -180,7 +201,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "twenty48",
     title: "2048",
-    blurb: "Merge climb. Offline high-score grind.",
+    blurb: "Merge climb. High-score grind.",
     time: "~5 min",
     accent: "var(--plum)",
     ink: "#fff",
@@ -237,16 +258,15 @@ export const GAMES: GameMeta[] = [
 ];
 
 export const MODE_LABEL: Record<PlayMode, string> = {
-  solo: "Solo · offline",
-  "local-multi": "Local multi only",
-  both: "Solo + local multi",
+  solo: "Solo",
+  online: "Online multiplayer",
+  both: "Solo + online",
 };
 
 export const TAGLINES = [
-  "Twenty-one games. Couch rivals. Fully offline.",
-  "Competitive energy. Zero servers required.",
-  "Log in locally. Flex high scores. Sabotage friends.",
-  "Install it. Play on a plane. Still win.",
-  "Synk ID coming soon — local login works today.",
-  "Crew Check, Claimcraft, Slither chaos. Pick a fight.",
+  "Log in. Create a room. Play live against real rivals.",
+  "Online multiplayer rooms — share a code, start the match.",
+  "Pulse Duel, Gridlock, Xs & Os — synced over the wire.",
+  "Solo high scores stay local. Multiplayer needs your account.",
+  "No placeholders. Real rooms. Real opponents.",
 ];
