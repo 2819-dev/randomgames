@@ -788,7 +788,7 @@ export function OnlinePulseDuel({ onBack }: { onBack: () => void }) {
         maxRounds: 5,
         goAt: null,
         tapped: [null, null],
-        msg: "Host arms the pulse. Don't tap early.",
+        msg: "Pulses auto-arm. Don't tap early.",
         seats: players.map((p) => ({
           userId: p.user_id,
           seat: p.seat,
