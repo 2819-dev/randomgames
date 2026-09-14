@@ -120,7 +120,7 @@ export function TicTacToeGame({ onBack }: { onBack: () => void }) {
       accent="var(--coral)"
       ink="#fff"
       onBack={onBack}
-      stats={<span>{result ? "Done" : thinking ? "…" : mode === "hotseat" ? "2P" : "CPU"}</span>}
+      stats={<span>{result ? "Done" : thinking ? "…" : mode === "hotseat" ? "2P" : "Computer"}</span>}
     >
       <div className="mb-4 flex flex-wrap justify-center gap-2">
         <button
@@ -128,7 +128,7 @@ export function TicTacToeGame({ onBack }: { onBack: () => void }) {
           className={`btn-chunky rounded-md px-3 py-1.5 text-sm ${mode === "cpu" ? "bg-coral text-white" : "bg-paper"}`}
           onClick={() => reset("cpu")}
         >
-          vs CPU
+          vs Computer
         </button>
         <button
           type="button"

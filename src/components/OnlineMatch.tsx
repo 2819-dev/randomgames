@@ -186,9 +186,9 @@ export function OnlineMatch({
   if (!user || !profile) {
     return (
       <div className="chunky-lg rounded-xl bg-paper p-6 text-center">
-        <p className="font-bold">Log in to play {title} live against another player.</p>
+        <p className="font-bold">Sign in to play {title} with a friend.</p>
         <button type="button" className="btn-chunky mt-4 rounded-md bg-paper px-4 py-2" onClick={onBack}>
-          ← Lobby
+          ← Back
         </button>
       </div>
     );
@@ -198,13 +198,13 @@ export function OnlineMatch({
     return (
       <div className="chunky-lg mx-auto max-w-lg rounded-xl bg-paper p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="font-[family-name:var(--font-display)] text-2xl">{title} Online</h2>
+          <h2 className="font-[family-name:var(--font-display)] text-2xl">{title} with friends</h2>
           <button type="button" className="btn-chunky rounded-md bg-paper px-3 py-1.5 text-sm" onClick={onBack}>
-            ← Lobby
+            ← Back
           </button>
         </div>
         <p className="mb-4 text-sm font-semibold text-ink/70">
-          Create a room and share the code, or join a friend&apos;s live match over the internet.
+          Start a match and share the invite code — or jump into a friend&apos;s game.
         </p>
         <button
           type="button"
@@ -212,12 +212,12 @@ export function OnlineMatch({
           className="btn-chunky w-full rounded-md bg-lime px-4 py-3 font-extrabold disabled:opacity-50"
           onClick={() => void hostCreate()}
         >
-          Create room
+          Start a match
         </button>
         <div className="mt-4 flex gap-2">
           <input
             className="w-full rounded-md border-[3px] border-ink bg-white px-3 py-2 font-bold uppercase tracking-widest outline-none"
-            placeholder="ROOM CODE"
+            placeholder="INVITE CODE"
             value={codeInput}
             onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
             maxLength={6}
@@ -256,7 +256,7 @@ export function OnlineMatch({
           </button>
         </div>
         <p className="mb-4 text-center text-sm font-bold">
-          Room code{" "}
+          Invite code{" "}
           <span className="rounded-md border-[3px] border-ink bg-butter px-2 py-1 font-[family-name:var(--font-display)] text-xl tracking-widest">
             {room.code}
           </span>
@@ -268,12 +268,12 @@ export function OnlineMatch({
               className="flex items-center justify-between rounded-md border-[3px] border-ink bg-white px-3 py-2 font-bold"
             >
               <span>
-                Seat {p.seat + 1}: {p.profile.display_name || p.profile.username}
-                {p.user_id === room.host_id ? " (host)" : ""}
-                {p.user_id === user.id ? " — you" : ""}
+                Player {p.seat + 1}: {p.profile.display_name || p.profile.username}
+                {p.user_id === room.host_id ? " · host" : ""}
+                {p.user_id === user.id ? " · you" : ""}
               </span>
               <span className={p.ready || p.user_id === room.host_id ? "text-lime-700" : "text-ink/50"}>
-                {p.user_id === room.host_id ? "HOST" : p.ready ? "READY" : "…"}
+                {p.user_id === room.host_id ? "Host" : p.ready ? "Ready" : "…"}
               </span>
             </li>
           ))}
@@ -282,7 +282,7 @@ export function OnlineMatch({
               key={`empty-${i}`}
               className="rounded-md border-[3px] border-dashed border-ink/40 px-3 py-2 text-ink/50"
             >
-              Waiting for player…
+              Waiting for a friend…
             </li>
           ))}
         </ul>
@@ -293,7 +293,7 @@ export function OnlineMatch({
               className="btn-chunky rounded-md bg-butter px-4 py-2 font-extrabold"
               onClick={() => void toggleReady()}
             >
-              {me?.ready ? "Unready" : "Ready up"}
+              {me?.ready ? "Not ready" : "I’m ready"}
             </button>
           )}
           {isHost && (
@@ -303,7 +303,7 @@ export function OnlineMatch({
               className="btn-chunky rounded-md bg-coral px-4 py-2 font-extrabold text-white disabled:opacity-50"
               onClick={() => void startMatch()}
             >
-              Start match ({players.length}/{minPlayers}+)
+              Let’s go ({players.length}/{minPlayers}+)
             </button>
           )}
         </div>
@@ -311,7 +311,7 @@ export function OnlineMatch({
           <p className="mt-3 rounded-md border-[3px] border-ink bg-coral/20 px-3 py-2 text-sm font-bold">{error}</p>
         )}
         {players.length >= minPlayers && !isHost && (
-          <p className="mt-3 text-center text-xs font-semibold text-ink/60">Waiting for host to start…</p>
+          <p className="mt-3 text-center text-xs font-semibold text-ink/60">Almost — waiting for the host…</p>
         )}
       </div>
     );
@@ -319,7 +319,7 @@ export function OnlineMatch({
 
   if (!me) {
     return (
-      <div className="chunky-lg rounded-xl bg-paper p-6 text-center font-bold">Reconnecting to room…</div>
+      <div className="chunky-lg rounded-xl bg-paper p-6 text-center font-bold">One moment — catching up…</div>
     );
   }
 
@@ -327,10 +327,10 @@ export function OnlineMatch({
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <button type="button" className="btn-chunky rounded-md bg-paper px-3 py-1.5 text-sm" onClick={onBack}>
-          ← Leave match
+          ← Leave game
         </button>
         <p className="text-sm font-bold">
-          {title} · room {room.code}
+          {title} · {room.code}
         </p>
       </div>
       {renderGame({ room, players, me, isHost, pushState })}

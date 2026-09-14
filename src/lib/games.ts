@@ -41,7 +41,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "pulseduel",
     title: "Pulse Duel",
-    blurb: "Live reaction war. Wait for the pulse — don't tap early.",
+    blurb: "Wait for the flash. Tap first. Don't jump the gun.",
     time: "~3 min",
     accent: "#ef4444",
     ink: "#fff",
@@ -51,7 +51,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "gridlock",
     title: "Gridlock",
-    blurb: "Snatch glowing cells before your rival locks the board.",
+    blurb: "Grab the glowing tiles before your friend cleans the board.",
     time: "~2 min",
     accent: "#22c55e",
     sticker: "🔲",
@@ -60,7 +60,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "tictactoe",
     title: "Xs & Os",
-    blurb: "Live online duel — or roast the CPU on this device.",
+    blurb: "Classic three-in-a-row — vs a friend online, or the computer here.",
     time: "~1 min",
     accent: "var(--coral)",
     ink: "#fff",
@@ -70,7 +70,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "connect",
     title: "Connect 4",
-    blurb: "Drop discs across the net. Real rooms, real rivals.",
+    blurb: "Drop discs, block lines, and race a friend to four.",
     time: "~3 min",
     accent: "#f97316",
     ink: "#fff",
@@ -80,7 +80,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "showdown",
     title: "Showdown",
-    blurb: "Rock-paper-scissors online. First to three wins.",
+    blurb: "Rock, paper, scissors — first to three takes the bragging rights.",
     time: "~2 min",
     accent: "#ff6bcb",
     ink: "#fff",
@@ -90,7 +90,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "claimcraft",
     title: "Claimcraft",
-    blurb: "Paint the grid live. Defend chunks against a real player.",
+    blurb: "Paint the map, flip territory, and outclaim your rival.",
     time: "~4 min",
     accent: "#65a30d",
     sticker: "⛏️",
@@ -99,7 +99,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "crewcheck",
     title: "Crew Check",
-    blurb: "Pass-and-play sabotage on one device.",
+    blurb: "Pass the phone, find the impostor, finish the jobs.",
     time: "~8 min",
     accent: "#ef4444",
     ink: "#fff",
@@ -109,7 +109,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "slither",
     title: "Slither",
-    blurb: "Cut bots, stack kill streaks, grab power pellets.",
+    blurb: "Grow longer, cut closer, and chase a wild high score.",
     time: "~5 min",
     accent: "#c8f542",
     sticker: "🪱",
@@ -118,7 +118,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "rumble",
     title: "Rumble",
-    blurb: "Survive the pit. Pulse shockwaves. Level mid-fight.",
+    blurb: "Survive the chaos, ride the shockwaves, keep leveling up.",
     time: "~4 min",
     accent: "#a3e635",
     sticker: "💥",
@@ -127,7 +127,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "dodge",
     title: "Dodge+",
-    blurb: "Wave shooter with shields, tanks, and screen clears.",
+    blurb: "Weave through waves, grab shields, and clear the screen.",
     time: "~3 min",
     accent: "#fb7185",
     ink: "#fff",
@@ -137,7 +137,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "breakout",
     title: "Breakout+",
-    blurb: "Combos, lasers, multi-ball — climb the brick ladder.",
+    blurb: "Smash bricks, stack combos, and keep the ball flying.",
     time: "~4 min",
     accent: "#ff8c42",
     sticker: "🧱",
@@ -146,7 +146,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "whack",
     title: "Whack+",
-    blurb: "Gold moles, bombs, fever mode. Chase the high score.",
+    blurb: "Hit the gold, skip the bombs, ride the fever streak.",
     time: "~1 min",
     accent: "#ff8c42",
     sticker: "🔨",
@@ -155,7 +155,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "snake",
     title: "Snek",
-    blurb: "Classic high-score noodle. Don't hit yourself.",
+    blurb: "Eat, grow, don't crash. Simple. Addictive.",
     time: "~2 min",
     accent: "var(--lime)",
     sticker: "🐍",
@@ -164,7 +164,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "flappy",
     title: "Flap",
-    blurb: "Pipe gauntlet. Tap rhythm. Beat your ghost score.",
+    blurb: "Find the rhythm, clear the pipes, beat your best.",
     time: "~2 min",
     accent: "#7dd3fc",
     sticker: "🐤",
@@ -173,7 +173,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "mines",
     title: "Mines",
-    blurb: "Solo logic clear. Pure brain sweat.",
+    blurb: "Clear the field with calm clicks and sharp instincts.",
     time: "~3 min",
     accent: "#94a3b8",
     sticker: "💣",
@@ -182,7 +182,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "memory",
     title: "Matchup",
-    blurb: "Flip fast. Fewest moves wins the board.",
+    blurb: "Flip pairs fast. Fewer moves, bigger win.",
     time: "~3 min",
     accent: "var(--sky)",
     ink: "#fff",
@@ -192,7 +192,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "reaction",
     title: "Zap",
-    blurb: "Reaction duels against the clock. Pure solo speed.",
+    blurb: "When it flashes, tap. How sharp is your timing?",
     time: "~1 min",
     accent: "var(--butter)",
     sticker: "⚡",
@@ -201,7 +201,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "twenty48",
     title: "2048",
-    blurb: "Merge climb. High-score grind.",
+    blurb: "Slide, merge, climb. One more try always calls.",
     time: "~5 min",
     accent: "var(--plum)",
     ink: "#fff",
@@ -211,7 +211,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "echo",
     title: "Echo",
-    blurb: "Simon-style memory jam. Solo focus mode.",
+    blurb: "Watch the pattern. Repeat it. Don't lose the beat.",
     time: "~2 min",
     accent: "var(--mint)",
     sticker: "🎵",
@@ -220,7 +220,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "lights",
     title: "Lights Out",
-    blurb: "Puzzle flips. Solo-only brain teaser.",
+    blurb: "Flip the lights. Solve the board. Feel clever.",
     time: "~3 min",
     accent: "#7ce7ff",
     sticker: "💡",
@@ -229,7 +229,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "hangman",
     title: "Hangman",
-    blurb: "Guess the word before the smile goes skull.",
+    blurb: "Guess the word before the grin turns grim.",
     time: "~2 min",
     accent: "#a78bfa",
     ink: "#fff",
@@ -239,7 +239,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "higher",
     title: "Higher?",
-    blurb: "Card streak challenge. Solo gambling vibes.",
+    blurb: "Higher or lower? Ride the streak while luck lasts.",
     time: "~1 min",
     accent: "#22d3ee",
     sticker: "🃏",
@@ -248,7 +248,7 @@ export const GAMES: GameMeta[] = [
   {
     id: "catch",
     title: "Catch!",
-    blurb: "Snack rush. Tap before they vanish.",
+    blurb: "Snacks falling fast. Tap them before they're gone.",
     time: "~1 min",
     accent: "#f43f5e",
     ink: "#fff",
@@ -259,14 +259,14 @@ export const GAMES: GameMeta[] = [
 
 export const MODE_LABEL: Record<PlayMode, string> = {
   solo: "Solo",
-  online: "Online multiplayer",
-  both: "Solo + online",
+  online: "With friends",
+  both: "Solo or friends",
 };
 
 export const TAGLINES = [
-  "Log in. Create a room. Play live against real rivals.",
-  "Online multiplayer rooms — share a code, start the match.",
-  "Pulse Duel, Gridlock, Xs & Os — synced over the wire.",
-  "Solo high scores stay local. Multiplayer needs your account.",
-  "No placeholders. Real rooms. Real opponents.",
+  "Tiny games. Big energy. Challenge a friend in seconds.",
+  "Share a code, jump in together, and play for real.",
+  "Solo when you want quiet. Live when you want a rival.",
+  "Quick matches, sharp vibes, and plenty of rematch energy.",
+  "Bored? Pick a game. Better with a friend.",
 ];

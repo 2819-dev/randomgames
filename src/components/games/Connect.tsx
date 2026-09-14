@@ -128,7 +128,7 @@ export function ConnectGame({ onBack }: { onBack: () => void }) {
       onBack={onBack}
       stats={
         <span>
-          {result === "R" ? (mode === "cpu" ? "You!" : "Red") : result === "Y" ? (mode === "cpu" ? "CPU" : "Yellow") : busy ? "…" : mode === "hotseat" ? turn : "Drop"}
+          {result === "R" ? (mode === "cpu" ? "You!" : "Red") : result === "Y" ? (mode === "cpu" ? "Computer" : "Yellow") : busy ? "…" : mode === "hotseat" ? turn : "Drop"}
         </span>
       }
     >
@@ -140,7 +140,7 @@ export function ConnectGame({ onBack }: { onBack: () => void }) {
             className={`btn-chunky rounded-md px-3 py-1.5 text-sm ${mode === "cpu" ? "bg-[#f97316] text-white" : "bg-paper"}`}
             onClick={() => reset("cpu")}
           >
-            vs CPU
+            vs Computer
           </button>
           <button
             type="button"
@@ -157,7 +157,7 @@ export function ConnectGame({ onBack }: { onBack: () => void }) {
               : "Red connects four!"
             : result === "Y"
               ? mode === "cpu"
-                ? "CPU connected. Rematch?"
+                ? "Computer connected four. Rematch?"
                 : "Yellow connects four!"
               : result === "draw"
                 ? "Draw. The board is full of drama."

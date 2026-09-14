@@ -58,7 +58,7 @@ export function ShowdownGame({ onBack }: { onBack: () => void }) {
       setStreak((s) => s + 1);
     } else {
       setP2((n) => n + 1);
-      setMsg(mode === "cpu" ? "CPU snagged it" : "P2 takes the round!");
+      setMsg(mode === "cpu" ? "Computer got it" : "P2 takes the round!");
       playBonk();
       setStreak(0);
     }
@@ -99,7 +99,7 @@ export function ShowdownGame({ onBack }: { onBack: () => void }) {
             className={`btn-chunky rounded-md px-3 py-1.5 text-sm ${mode === "cpu" ? "bg-[#ff6bcb] text-white" : "bg-paper"}`}
             onClick={() => reset("cpu")}
           >
-            vs CPU
+            vs Computer
           </button>
           <button
             type="button"
@@ -118,7 +118,7 @@ export function ShowdownGame({ onBack }: { onBack: () => void }) {
           </div>
           <p className="font-[family-name:var(--font-display)] text-2xl">VS</p>
           <div>
-            <p className="text-xs font-extrabold uppercase tracking-widest">{mode === "cpu" ? "CPU" : "P2"}</p>
+            <p className="text-xs font-extrabold uppercase tracking-widest">{mode === "cpu" ? "Computer" : "P2"}</p>
             <p className="text-5xl">{right ? CHOICES.find((c) => c.id === right)?.emoji : "❔"}</p>
           </div>
         </div>

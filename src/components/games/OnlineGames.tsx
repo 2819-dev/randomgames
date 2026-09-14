@@ -918,10 +918,10 @@ export function OnlineOrLocal({
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-[family-name:var(--font-display)] text-2xl">{title}</h2>
         <button type="button" className="btn-chunky rounded-md bg-paper px-3 py-1.5 text-sm" onClick={onBack}>
-          ← Lobby
+          ← Back
         </button>
       </div>
-      <p className="mb-4 text-sm font-semibold text-ink/70">Play on this device, or go live online.</p>
+      <p className="mb-4 text-sm font-semibold text-ink/70">How do you want to play?</p>
       <div className="flex flex-col gap-3">
         <button
           type="button"
@@ -931,7 +931,7 @@ export function OnlineOrLocal({
             setMode("online");
           }}
         >
-          Online multiplayer
+          With a friend online
         </button>
         <button
           type="button"
@@ -941,7 +941,7 @@ export function OnlineOrLocal({
             setMode("local");
           }}
         >
-          Solo / this device
+          Just me on this device
         </button>
       </div>
     </div>

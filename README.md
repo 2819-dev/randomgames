@@ -1,15 +1,17 @@
 # Bored Box
 
-A chunky, playful arcade of tiny browser games for when you're bored.
+A chunky, playful arcade of tiny browser games for when you're bored — solo or with friends.
 
 **Live:** https://boredbox.netlify.app
 
 ## Games
 
-- **Slither** — pellets, growth, and hungry bots (Slither.io vibes)
+- **Pulse Duel** & **Gridlock** — live matches with friends
+- **Slither** — grow, cut, chase the high score
 - Snek · Breakout · Flap · Dodge · Mines
 - Matchup · Xs & Os · Zap · 2048 · Echo · Whack
 - Showdown · Lights Out · Hangman · Connect 4 · Higher? · Catch!
+- Claimcraft · Crew Check · Rumble
 
 ## Run
 

@@ -1,7 +1,7 @@
 {
   "name": "Bored Box",
   "short_name": "Bored Box",
-  "description": "Competitive offline arcade. Local multiplayer, solo scores, installable — works without internet.",
+  "description": "Tiny browser games for restless moments. Play solo or invite a friend.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",

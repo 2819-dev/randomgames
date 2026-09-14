@@ -17,9 +17,9 @@ export function AuthButton() {
           playTap();
         }}
         className="btn-chunky rounded-md bg-paper px-3 py-1.5 text-sm"
-        aria-label={user ? `Account ${profile?.username || ""}` : "Log in"}
+        aria-label={user ? `Signed in as ${profile?.username || ""}` : "Sign in"}
       >
-        {user ? `👤 ${profile?.username || "player"}` : "Log in"}
+        {user ? `👤 ${profile?.username || "player"}` : "Sign in"}
       </button>
       {open && (
         <AuthModal
@@ -67,7 +67,7 @@ function AuthModal({ onClose, onLogout }: { onClose: () => void; onLogout: () =>
       playTap();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Auth failed");
+      setError(err instanceof Error ? err.message : "Something went wrong — try again");
     } finally {
       setBusy(false);
     }
@@ -90,10 +90,10 @@ function AuthModal({ onClose, onLogout }: { onClose: () => void; onLogout: () =>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="font-[family-name:var(--font-display)] text-2xl tracking-wide">
-              {user ? "Online account" : "Log in to play online"}
+              {user ? "Your profile" : "Sign in to play with friends"}
             </h2>
             <p className="mt-1 text-sm font-medium text-ink/70">
-              Real accounts on Supabase. Needed for live multiplayer rooms.
+              Create a free profile to host or join live matches.
             </p>
           </div>
           <button type="button" className="btn-chunky rounded-md bg-paper px-2 py-1 text-sm" onClick={onClose}>
@@ -130,7 +130,7 @@ function AuthModal({ onClose, onLogout }: { onClose: () => void; onLogout: () =>
                 className={`btn-chunky flex-1 rounded-md px-3 py-2 text-sm ${mode === "register" ? "bg-lime" : "bg-paper"}`}
                 onClick={() => setMode("register")}
               >
-                Create
+                Join free
               </button>
             </div>
             <label className="block text-sm font-bold">
@@ -179,7 +179,7 @@ function AuthModal({ onClose, onLogout }: { onClose: () => void; onLogout: () =>
               disabled={busy}
               className="btn-chunky w-full rounded-md bg-sky px-4 py-2 font-extrabold text-white disabled:opacity-60"
             >
-              {busy ? "…" : mode === "login" ? "Enter online arcade" : "Create online account"}
+              {busy ? "…" : mode === "login" ? "Let’s play" : "Create profile"}
             </button>
           </form>
         )}

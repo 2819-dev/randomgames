@@ -16,9 +16,9 @@ const body = Rubik({
 });
 
 export const metadata: Metadata = {
-  title: "Bored Box — tiny games for restless brains",
+  title: "Bored Box — tiny games for restless moments",
   description:
-    "Online arcade with real multiplayer rooms — log in, share a code, play live. Solo games included.",
+    "Quick, playful browser games. Play solo or invite a friend with a simple match code.",
   applicationName: "Bored Box",
   appleWebApp: {
     capable: true,

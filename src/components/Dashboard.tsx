@@ -155,7 +155,7 @@ export function Dashboard() {
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <p className="rounded-md border-[3px] border-ink bg-butter px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em]">
-          Online arcade · live rooms
+          Quick games · play with friends
         </p>
         <AuthButton />
       </div>
@@ -171,7 +171,7 @@ export function Dashboard() {
             priority
           />
           <p className="inline-block animate-wiggle rounded-md border-[3px] border-ink bg-lime px-3 py-1 text-xs font-extrabold uppercase tracking-[0.18em]">
-            Real multiplayer
+            Better with friends
           </p>
         </div>
         <h1 className="animate-pop-in font-[family-name:var(--font-display)] text-5xl leading-[1.05] tracking-wide text-ink sm:text-7xl">
@@ -185,7 +185,7 @@ export function Dashboard() {
         </p>
         {profile && (
           <p className="mt-3 text-sm font-bold text-ink/70">
-            Online as <span className="underline">{profile.username}</span> — create or join a live room.
+            Playing as <span className="underline">{profile.username}</span> — invite a friend anytime.
           </p>
         )}
       </header>
@@ -194,9 +194,9 @@ export function Dashboard() {
         {(
           [
             ["all", "All games"],
-            ["online", "Online multi"],
+            ["online", "With friends"],
             ["solo", "Solo"],
-            ["both", "Solo + online"],
+            ["both", "Solo or friends"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -249,8 +249,8 @@ export function Dashboard() {
       </section>
 
       <footer className="mt-auto space-y-2 pt-12 text-sm font-semibold text-ink/55">
-        <p>Log in for live multiplayer rooms. Solo games work without an account.</p>
-        <p>Tip: share a 6-character room code with a friend on another device.</p>
+        <p>Sign in to play with friends. Solo games are ready anytime.</p>
+        <p>Invite tip: send your match code — six letters, easy to share.</p>
       </footer>
     </main>
   );
