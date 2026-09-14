@@ -4,15 +4,32 @@ import Image from "next/image";
 import { useState } from "react";
 import { AuthButton } from "@/components/AuthButton";
 import { useAuth } from "@/components/AuthProvider";
+import { ComingSoon } from "@/components/ComingSoon";
+import { CrewCheckGame } from "@/components/games/CrewCheck";
+import { isOwnerUsername } from "@/lib/access";
 import { GAMES, MODE_LABEL, TAGLINES, type GameId } from "@/lib/games";
 import { playTap } from "@/lib/sfx";
-import { CrewCheckGame } from "@/components/games/CrewCheck";
 
 export function Dashboard() {
   const [active, setActive] = useState<GameId | null>(null);
-  const { profile } = useAuth();
+  const { profile, loading } = useAuth();
   const tagline = TAGLINES[0]!;
   const game = GAMES[0]!;
+  const owner = isOwnerUsername(profile?.username);
+
+  // Public visitors (and anyone not signed in as Vision) see the holding page.
+  // All games stay in the codebase — only visibility is gated.
+  if (loading) {
+    return (
+      <main className="coming-soon flex min-h-[100dvh] flex-1 items-center justify-center">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-black/20" aria-label="Loading" />
+      </main>
+    );
+  }
+
+  if (!owner) {
+    return <ComingSoon />;
+  }
 
   if (active === "crewcheck") {
     return (
@@ -26,7 +43,7 @@ export function Dashboard() {
     <main className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col overflow-hidden px-4 py-8 sm:px-6 sm:py-12">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <p className="rounded-md border-[3px] border-ink bg-butter px-3 py-1 text-xs font-extrabold uppercase tracking-[0.14em]">
-          Online crew game · 4–8 players
+          Owner preview · hidden from public
         </p>
         <AuthButton />
       </div>
